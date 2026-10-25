@@ -1,13 +1,26 @@
 /**
  * AI 引擎：negamax + alpha-beta + Zobrist 置换表 + 迭代加深。
  *
+ * 引擎按棋盘尺寸参数化：小盘深搜，大盘自动限深并靠评估函数收手。
  * 这里用 Uint8Array 做可变棋盘，和规则层的不可变状态分开，
  * 避免深搜时产生大量对象。
  */
 
-import { CELL_COUNT, COLS, ROWS, WIN, other, type Player } from '../game/rules';
+import {
+  DEFAULT_CONFIG,
+  SIZE_WIN,
+  other,
+  type DuoPlayer,
+  type GameConfig,
+} from '../game/rules';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
+
+export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
+  easy: '简单',
+  normal: '普通',
+  hard: '困难',
+};
 
 export interface MoveResult {
   col: number;
@@ -20,39 +33,54 @@ export interface MoveResult {
 const INF = 1_000_000;
 const WIN_SCORE = 100_000;
 
-/** 中心优先的走法顺序 */
-const ORDER = [2, 3, 1, 4, 0, 5];
+const DIRECTIONS = [
+  [0, 1],
+  [1, 0],
+  [1, 1],
+  [1, -1],
+] as const;
 
-/** 全部 54 条 4 格窗口 */
-const WINDOWS: number[][] = [];
-{
-  const dirs = [
-    [0, 1],
-    [1, 0],
-    [1, 1],
-    [1, -1],
-  ] as const;
+interface Engine {
+  id: string;
+  cols: number;
+  rows: number;
+  win: number;
+  cellCount: number;
+  board: Uint8Array;
+  heights: Uint8Array;
+  /** 扁平化的所有 win 格窗口 */
+  windows: Int32Array;
+  windowCount: number;
+  z1: Int32Array;
+  z2: Int32Array;
+  /** 中心优先的走法顺序 */
+  order: number[];
+}
 
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      for (const [dr, dc] of dirs) {
+let engine: Engine | null = null;
+
+function build(config: GameConfig): Engine {
+  const { cols, rows, win } = config;
+  const cellCount = cols * rows;
+
+  const list: number[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      for (const [dr, dc] of DIRECTIONS) {
         const cells: number[] = [];
-        for (let k = 0; k < WIN; k++) {
+        for (let k = 0; k < win; k++) {
           const rr = r + dr * k;
           const cc = c + dc * k;
-          if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) break;
-          cells.push(rr * COLS + cc);
+          if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) break;
+          cells.push(rr * cols + cc);
         }
-        if (cells.length === WIN) WINDOWS.push(cells);
+        if (cells.length === win) list.push(...cells);
       }
     }
   }
-}
 
-/** Zobrist 键（两个 32 位半区） */
-const Z1 = new Int32Array(CELL_COUNT * 2);
-const Z2 = new Int32Array(CELL_COUNT * 2);
-{
+  const z1 = new Int32Array(cellCount * 2);
+  const z2 = new Int32Array(cellCount * 2);
   let s = 0x2f6e2b1;
   const rnd = () => {
     s ^= s << 13;
@@ -60,10 +88,38 @@ const Z2 = new Int32Array(CELL_COUNT * 2);
     s ^= s << 5;
     return s | 0;
   };
-  for (let i = 0; i < Z1.length; i++) {
-    Z1[i] = rnd();
-    Z2[i] = rnd();
+  for (let i = 0; i < z1.length; i++) {
+    z1[i] = rnd();
+    z2[i] = rnd();
   }
+
+  const mid = (cols - 1) / 2;
+  const order = Array.from({ length: cols }, (_, c) => c).sort(
+    (a, b) => Math.abs(a - mid) - Math.abs(b - mid) || a - b,
+  );
+
+  return {
+    id: `${cols}x${rows}x${win}`,
+    cols,
+    rows,
+    win,
+    cellCount,
+    board: new Uint8Array(cellCount),
+    heights: new Uint8Array(cols),
+    windows: new Int32Array(list),
+    windowCount: win > 0 ? list.length / win : 0,
+    z1,
+    z2,
+    order,
+  };
+}
+
+function getEngine(config: GameConfig): Engine {
+  const safe: GameConfig = { ...config, players: 2 };
+  if (!engine || engine.id !== `${safe.cols}x${safe.rows}x${safe.win}`) {
+    engine = build(safe);
+  }
+  return engine;
 }
 
 /** 置换表 */
@@ -75,9 +131,6 @@ const ttScore = new Int32Array(TT_SIZE);
 const ttDepth = new Int8Array(TT_SIZE);
 const ttFlag = new Uint8Array(TT_SIZE); // 1 精确 / 2 下界 / 3 上界
 
-/** 搜索用可变状态 */
-const board = new Uint8Array(CELL_COUNT);
-const heights = new Uint8Array(COLS);
 let h1 = 0;
 let h2 = 0;
 let nodes = 0;
@@ -85,38 +138,17 @@ let deadline = 0;
 let aborted = false;
 let salt = 1;
 
-interface Level {
-  /** 最大搜索深度 */
-  depth: number;
-  /** 时间预算（毫秒） */
-  time: number;
-  /** 随机走子概率（只对简单档） */
-  random: number;
-}
-
-const LEVELS: Record<Difficulty, Level> = {
-  easy: { depth: 2, time: 120, random: 0.32 },
-  normal: { depth: 6, time: 700, random: 0 },
-  hard: { depth: 14, time: 1400, random: 0 },
-};
-
-export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-  easy: '简单',
-  normal: '普通',
-  hard: '困难',
-};
-
-function reset(inputBoard: readonly number[], inputHeights: readonly number[]): void {
-  for (let i = 0; i < CELL_COUNT; i++) board[i] = inputBoard[i] | 0;
-  for (let c = 0; c < COLS; c++) heights[c] = inputHeights[c] | 0;
+function reset(e: Engine, inputBoard: readonly number[], inputHeights: readonly number[]): void {
+  for (let i = 0; i < e.cellCount; i++) e.board[i] = inputBoard[i] | 0;
+  for (let c = 0; c < e.cols; c++) e.heights[c] = inputHeights[c] | 0;
 
   h1 = 0;
   h2 = 0;
-  for (let i = 0; i < CELL_COUNT; i++) {
-    const v = board[i];
+  for (let i = 0; i < e.cellCount; i++) {
+    const v = e.board[i];
     if (v === 1 || v === 2) {
-      h1 ^= Z1[i * 2 + v - 1];
-      h2 ^= Z2[i * 2 + v - 1];
+      h1 ^= e.z1[i * 2 + v - 1];
+      h2 ^= e.z2[i * 2 + v - 1];
     }
   }
 
@@ -126,112 +158,82 @@ function reset(inputBoard: readonly number[], inputHeights: readonly number[]): 
   ttLock.fill(0);
 }
 
-function winsAt(row: number, col: number, player: Player): boolean {
-  // 横
-  let n = 1;
-  for (let i = 1; i < WIN; i++) {
-    const c = col - i;
-    if (c < 0 || board[row * COLS + c] !== player) break;
-    n++;
+function winsAt(e: Engine, row: number, col: number, player: DuoPlayer): boolean {
+  const { board, cols, rows, win } = e;
+  for (const [dr, dc] of DIRECTIONS) {
+    let n = 1;
+    for (const sign of [-1, 1] as const) {
+      for (let i = 1; i < win; i++) {
+        const r = row + dr * sign * i;
+        const c = col + dc * sign * i;
+        if (r < 0 || r >= rows || c < 0 || c >= cols || board[r * cols + c] !== player) break;
+        n++;
+      }
+    }
+    if (n >= win) return true;
   }
-  for (let i = 1; i < WIN; i++) {
-    const c = col + i;
-    if (c >= COLS || board[row * COLS + c] !== player) break;
-    n++;
-  }
-  if (n >= WIN) return true;
-
-  // 竖
-  n = 1;
-  for (let i = 1; i < WIN; i++) {
-    const r = row - i;
-    if (r < 0 || board[r * COLS + col] !== player) break;
-    n++;
-  }
-  for (let i = 1; i < WIN; i++) {
-    const r = row + i;
-    if (r >= ROWS || board[r * COLS + col] !== player) break;
-    n++;
-  }
-  if (n >= WIN) return true;
-
-  // ↗
-  n = 1;
-  for (let i = 1; i < WIN; i++) {
-    const r = row - i;
-    const c = col - i;
-    if (r < 0 || c < 0 || board[r * COLS + c] !== player) break;
-    n++;
-  }
-  for (let i = 1; i < WIN; i++) {
-    const r = row + i;
-    const c = col + i;
-    if (r >= ROWS || c >= COLS || board[r * COLS + c] !== player) break;
-    n++;
-  }
-  if (n >= WIN) return true;
-
-  // ↘
-  n = 1;
-  for (let i = 1; i < WIN; i++) {
-    const r = row - i;
-    const c = col + i;
-    if (r < 0 || c >= COLS || board[r * COLS + c] !== player) break;
-    n++;
-  }
-  for (let i = 1; i < WIN; i++) {
-    const r = row + i;
-    const c = col - i;
-    if (r >= ROWS || c < 0 || board[r * COLS + c] !== player) break;
-    n++;
-  }
-  return n >= WIN;
+  return false;
 }
 
 /** 局面评估：站在 me 的视角 */
-function evaluate(me: Player): number {
+function evaluate(e: Engine, me: DuoPlayer): number {
   const opp = other(me);
+  const { board, windows, windowCount, win, cols, heights } = e;
   let score = 0;
 
-  for (let w = 0; w < WINDOWS.length; w++) {
-    const win = WINDOWS[w];
+  const strongOne = win >= 5 ? 220 : 150;
+  const weakOne = win >= 5 ? 18 : 12;
+  const strongBlock = win >= 5 ? 230 : 170;
+  const weakBlock = win >= 5 ? 20 : 14;
+
+  for (let w = 0; w < windowCount; w++) {
+    const base = w * win;
     let mine = 0;
     let theirs = 0;
-    for (let k = 0; k < WIN; k++) {
-      const v = board[win[k]];
+    for (let k = 0; k < win; k++) {
+      const v = board[windows[base + k]];
       if (v === me) mine++;
       else if (v === opp) theirs++;
     }
 
     if (mine === 0) {
-      if (theirs === 3) score -= 170;
-      else if (theirs === 2) score -= 14;
+      if (theirs === win - 1) score -= strongBlock;
+      else if (theirs === win - 2) score -= weakBlock;
       else if (theirs === 1) score -= 1;
     } else if (theirs === 0) {
-      if (mine === 3) score += 150;
-      else if (mine === 2) score += 12;
+      if (mine === win - 1) score += strongOne;
+      else if (mine === win - 2) score += weakOne;
       else score += 1;
     }
   }
 
   // 中心列位置分
-  for (let c = 0; c < COLS; c++) {
-    const bonus = c === 2 || c === 3 ? 2 : c === 1 || c === 4 ? 1 : 0;
+  const mid = (cols - 1) / 2;
+  for (let c = 0; c < cols; c++) {
+    const dist = Math.abs(c - mid);
+    const bonus = dist < 0.6 ? 2 : dist < 1.6 ? 1 : 0;
     if (bonus === 0) continue;
     const h = heights[c];
     for (let r = 0; r < h; r++) {
-      score += board[r * COLS + c] === me ? bonus : -bonus;
+      score += board[r * cols + c] === me ? bonus : -bonus;
     }
   }
 
   return score;
 }
 
-function negamax(me: Player, depth: number, alpha: number, beta: number, ply: number): number {
+function negamax(
+  e: Engine,
+  me: DuoPlayer,
+  depth: number,
+  alpha: number,
+  beta: number,
+  ply: number,
+): number {
   nodes++;
   if ((nodes & 2047) === 0 && performance.now() > deadline) aborted = true;
   if (aborted) return 0;
-  if (depth <= 0) return evaluate(me);
+  if (depth <= 0) return evaluate(e, me);
 
   const key = (h1 ^ h2) & TT_MASK;
   const lock = (h1 ^ salt) | 1;
@@ -247,29 +249,28 @@ function negamax(me: Player, depth: number, alpha: number, beta: number, ply: nu
   let best = -INF;
   let any = false;
 
-  for (let k = 0; k < COLS; k++) {
-    const c = ORDER[k];
-    const r = heights[c];
-    if (r >= ROWS) continue;
+  for (const c of e.order) {
+    const r = e.heights[c];
+    if (r >= e.rows) continue;
     any = true;
 
-    const i = r * COLS + c;
-    board[i] = me;
-    heights[c] = r + 1;
-    h1 ^= Z1[i * 2 + me - 1];
-    h2 ^= Z2[i * 2 + me - 1];
+    const i = r * e.cols + c;
+    e.board[i] = me;
+    e.heights[c] = r + 1;
+    h1 ^= e.z1[i * 2 + me - 1];
+    h2 ^= e.z2[i * 2 + me - 1];
 
     let value: number;
-    if (winsAt(r, c, me)) {
+    if (winsAt(e, r, c, me)) {
       value = WIN_SCORE - ply;
     } else {
-      value = -negamax(other(me), depth - 1, -beta, -alpha, ply + 1);
+      value = -negamax(e, other(me), depth - 1, -beta, -alpha, ply + 1);
     }
 
-    board[i] = 0;
-    heights[c] = r;
-    h1 ^= Z1[i * 2 + me - 1];
-    h2 ^= Z2[i * 2 + me - 1];
+    e.board[i] = 0;
+    e.heights[c] = r;
+    h1 ^= e.z1[i * 2 + me - 1];
+    h2 ^= e.z2[i * 2 + me - 1];
 
     if (aborted) return 0;
     if (value > best) best = value;
@@ -292,34 +293,33 @@ interface RootResult {
   score: number;
 }
 
-function rootSearch(me: Player, depth: number): RootResult {
+function rootSearch(e: Engine, me: DuoPlayer, depth: number): RootResult {
   const opp = other(me);
   let bestCol = -1;
   let bestScore = -INF;
   let alpha = -INF;
 
-  for (let k = 0; k < COLS; k++) {
-    const c = ORDER[k];
-    const r = heights[c];
-    if (r >= ROWS) continue;
+  for (const c of e.order) {
+    const r = e.heights[c];
+    if (r >= e.rows) continue;
 
-    const i = r * COLS + c;
-    board[i] = me;
-    heights[c] = r + 1;
-    h1 ^= Z1[i * 2 + me - 1];
-    h2 ^= Z2[i * 2 + me - 1];
+    const i = r * e.cols + c;
+    e.board[i] = me;
+    e.heights[c] = r + 1;
+    h1 ^= e.z1[i * 2 + me - 1];
+    h2 ^= e.z2[i * 2 + me - 1];
 
     let value: number;
-    if (winsAt(r, c, me)) {
+    if (winsAt(e, r, c, me)) {
       value = WIN_SCORE;
     } else {
-      value = -negamax(opp, depth - 1, -INF, -alpha, 1);
+      value = -negamax(e, opp, depth - 1, -INF, -alpha, 1);
     }
 
-    board[i] = 0;
-    heights[c] = r;
-    h1 ^= Z1[i * 2 + me - 1];
-    h2 ^= Z2[i * 2 + me - 1];
+    e.board[i] = 0;
+    e.heights[c] = r;
+    h1 ^= e.z1[i * 2 + me - 1];
+    h2 ^= e.z2[i * 2 + me - 1];
 
     if (aborted) break;
     if (value > bestScore) {
@@ -332,43 +332,89 @@ function rootSearch(me: Player, depth: number): RootResult {
   return { col: bestCol, score: bestScore };
 }
 
-/** 落下这一手之后，对手是否能立刻连四 */
-function givesOpponentWin(col: number, player: Player): boolean {
-  const row = heights[col];
-  const i = row * COLS + col;
-  board[i] = player;
-  heights[col] = row + 1;
+function wouldWin(e: Engine, col: number, player: DuoPlayer): boolean {
+  const row = e.heights[col];
+  if (row >= e.rows) return false;
+  const cell = row * e.cols + col;
+  e.board[cell] = player;
+  const win = winsAt(e, row, col, player);
+  e.board[cell] = 0;
+  return win;
+}
+
+/** 落下这一手之后，对手是否能立刻连成 win 个 */
+function givesOpponentWin(e: Engine, col: number, player: DuoPlayer): boolean {
+  const row = e.heights[col];
+  const i = row * e.cols + col;
+  e.board[i] = player;
+  e.heights[col] = row + 1;
 
   const opp = other(player);
   let loses = false;
-  for (let c = 0; c < COLS && !loses; c++) {
-    const r = heights[c];
-    if (r >= ROWS) continue;
-    const cell = r * COLS + c;
-    board[cell] = opp;
-    if (winsAt(r, c, opp)) loses = true;
-    board[cell] = 0;
+  for (let c = 0; c < e.cols && !loses; c++) {
+    const r = e.heights[c];
+    if (r >= e.rows) continue;
+    const cell = r * e.cols + c;
+    e.board[cell] = opp;
+    if (winsAt(e, r, c, opp)) loses = true;
+    e.board[cell] = 0;
   }
 
-  heights[col] = row;
-  board[i] = 0;
+  e.heights[col] = row;
+  e.board[i] = 0;
   return loses;
+}
+
+function maxDepth(difficulty: Difficulty, size: number): number {
+  if (difficulty === 'easy') return size <= 6 ? 2 : 3;
+  if (difficulty === 'normal') return size <= 6 ? 6 : size <= 8 ? 6 : 4;
+  return size <= 6 ? 14 : size <= 8 ? 9 : size <= 12 ? 6 : 5;
+}
+
+function timeBudget(difficulty: Difficulty, size: number): number {
+  if (difficulty === 'easy') return 120;
+  if (difficulty === 'normal') return size <= 8 ? 700 : 500;
+  return size <= 6 ? 1400 : size <= 8 ? 1100 : size <= 12 ? 900 : 800;
+}
+
+/** 没传配置时按棋盘反推，方便老调用与测试。 */
+function resolveConfig(
+  board: readonly number[],
+  heights: readonly number[],
+  config?: GameConfig,
+): GameConfig {
+  if (
+    config &&
+    config.cols === heights.length &&
+    config.cols * config.rows === board.length
+  ) {
+    return config;
+  }
+  const cols = heights.length || DEFAULT_CONFIG.cols;
+  const rows = cols > 0 ? Math.round(board.length / cols) : DEFAULT_CONFIG.rows;
+  const win =
+    (SIZE_WIN as Record<number, number>)[cols] ??
+    Math.min(4, Math.max(cols, rows));
+  return { cols, rows, win: Math.min(win, Math.max(cols, rows)), players: 2 };
 }
 
 export function chooseMove(
   inputBoard: readonly number[],
   inputHeights: readonly number[],
-  player: Player,
+  player: DuoPlayer,
   difficulty: Difficulty,
+  inputConfig?: GameConfig,
 ): MoveResult {
   const started = performance.now();
-  const level = LEVELS[difficulty];
+  const config = resolveConfig(inputBoard, inputHeights, inputConfig);
+  const e = getEngine(config);
+  const size = Math.min(e.cols, e.rows);
 
-  reset(inputBoard, inputHeights);
+  reset(e, inputBoard, inputHeights);
 
   const legal: number[] = [];
-  for (let c = 0; c < COLS; c++) {
-    if (heights[c] < ROWS) legal.push(c);
+  for (let c = 0; c < e.cols; c++) {
+    if (e.heights[c] < e.rows) legal.push(c);
   }
 
   if (legal.length === 0) {
@@ -378,38 +424,44 @@ export function chooseMove(
   // 空盘：直接走中心，省时间也符合开局直觉
   const empty = inputBoard.every((v) => v === 0);
   if (empty) {
-    const col = Math.random() < 0.5 ? 2 : 3;
+    const near = e.order.slice(0, 2);
+    const col = near[Math.floor(Math.random() * near.length)];
     return { col, score: 0, depth: 0, nodes: 0, ms: performance.now() - started };
   }
 
   // 能赢就赢
   for (const c of legal) {
-    const r = heights[c];
-    const i = r * COLS + c;
-    board[i] = player;
-    const win = winsAt(r, c, player);
-    board[i] = 0;
-    if (win) {
+    if (wouldWin(e, c, player)) {
       return { col: c, score: WIN_SCORE, depth: 1, nodes: 0, ms: performance.now() - started };
     }
   }
 
+  // 对手下一手能赢就堵
+  const opp = other(player);
+  for (const c of legal) {
+    if (wouldWin(e, c, opp)) {
+      return { col: c, score: 0, depth: 1, nodes: 0, ms: performance.now() - started };
+    }
+  }
+
   // 简单档：偶尔故意走一步不是最优的（但不送四连）
-  if (level.random > 0 && Math.random() < level.random) {
-    const safe = legal.filter((c) => !givesOpponentWin(c, player));
+  if (difficulty === 'easy' && Math.random() < 0.32) {
+    const safe = legal.filter((c) => !givesOpponentWin(e, c, player));
     const pool = safe.length > 0 ? safe : legal;
     const col = pool[Math.floor(Math.random() * pool.length)];
     return { col, score: 0, depth: 0, nodes: 0, ms: performance.now() - started };
   }
 
-  deadline = started + level.time;
+  const budget = timeBudget(difficulty, size);
+  const depthLimit = maxDepth(difficulty, size);
+  deadline = started + budget;
 
   let best: RootResult = { col: legal[0], score: -INF };
   let reached = 0;
 
-  for (let depth = 1; depth <= level.depth; depth++) {
+  for (let depth = 1; depth <= depthLimit; depth++) {
     const before = performance.now();
-    const result = rootSearch(player, depth);
+    const result = rootSearch(e, player, depth);
     if (aborted) break;
 
     if (result.col >= 0) best = result;
@@ -417,9 +469,9 @@ export function chooseMove(
 
     const decided = Math.abs(result.score) >= WIN_SCORE - 100;
     if (decided) break;
-    if (performance.now() - started > level.time) break;
+    if (performance.now() - started > budget) break;
     // 这一层已经花掉超过 35% 预算，下一层大概率来不及
-    if (performance.now() - before > level.time * 0.35) break;
+    if (performance.now() - before > budget * 0.35) break;
   }
 
   return {

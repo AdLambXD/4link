@@ -1,12 +1,13 @@
 import { chooseMove, type Difficulty, type MoveResult } from './engine';
-import type { Player } from '../game/rules';
+import type { DuoPlayer, GameConfig } from '../game/rules';
 
 interface Request {
   id: number;
   board: number[];
   heights: number[];
-  player: Player;
+  player: DuoPlayer;
   difficulty: Difficulty;
+  config: GameConfig;
 }
 
 interface Response {
@@ -21,7 +22,7 @@ const ctx = self as unknown as {
 };
 
 ctx.onmessage = (event) => {
-  const { id, board, heights, player, difficulty } = event.data;
-  const result = chooseMove(board, heights, player, difficulty);
+  const { id, board, heights, player, difficulty, config } = event.data;
+  const result = chooseMove(board, heights, player, difficulty, config);
   ctx.postMessage({ id, result });
 };

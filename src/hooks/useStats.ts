@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Player } from '../game/rules';
+import type { DuoPlayer } from '../game/rules';
 
 export interface Stats {
   p1: number;
@@ -36,7 +36,7 @@ export function useStats() {
     }
   }, [stats]);
 
-  const record = useCallback((winner: Player | null) => {
+  const record = useCallback((winner: DuoPlayer | null) => {
     setStats((prev) => {
       if (winner === null) return { ...prev, draws: prev.draws + 1 };
       if (winner === 1) return { ...prev, p1: prev.p1 + 1 };

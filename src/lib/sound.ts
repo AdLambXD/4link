@@ -1,19 +1,20 @@
 let ctx: AudioContext | null = null;
 
-/** 极简落子音效，失败静默忽略 */
-export function playDrop(player: 1 | 2, enabled: boolean): void {
+/** 极简落子音效，失败静默忽略。不同玩家用不同音高。 */
+export function playDrop(player: number, enabled: boolean): void {
   if (!enabled) return;
   try {
     ctx ??= new AudioContext();
     if (ctx.state === 'suspended') void ctx.resume();
 
     const t = ctx.currentTime;
+    const base = Math.max(180, 420 - (Math.max(1, player) - 1) * 46);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(player === 1 ? 420 : 320, t);
-    osc.frequency.exponentialRampToValueAtTime(player === 1 ? 210 : 160, t + 0.12);
+    osc.frequency.setValueAtTime(base, t);
+    osc.frequency.exponentialRampToValueAtTime(base / 2, t + 0.12);
 
     gain.gain.setValueAtTime(0.07, t);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);

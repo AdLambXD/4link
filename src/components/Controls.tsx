@@ -9,6 +9,7 @@ interface ControlsProps {
   canUndo: boolean;
   canHint: boolean;
   hintLoading: boolean;
+  showHint: boolean;
 }
 
 export function Controls({
@@ -20,6 +21,7 @@ export function Controls({
   canUndo,
   canHint,
   hintLoading,
+  showHint,
 }: ControlsProps) {
   return (
     <div className="controls">
@@ -33,10 +35,12 @@ export function Controls({
         <span>重开</span>
         <kbd>R</kbd>
       </button>
-      <button className="ticket" onClick={onHint} disabled={!canHint}>
-        <BulbIcon />
-        <span>{hintLoading ? '思考中' : '提示'}</span>
-      </button>
+      {showHint && (
+        <button className="ticket" onClick={onHint} disabled={!canHint}>
+          <BulbIcon />
+          <span>{hintLoading ? '思考中' : '提示'}</span>
+        </button>
+      )}
       <button
         className="ticket ticket-icon"
         onClick={onToggleSound}

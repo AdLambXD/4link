@@ -5,8 +5,14 @@ import { Controls } from './components/Controls';
 import { ArrowLeftIcon } from './components/Icons';
 import { Menu, type MatchConfig } from './components/Menu';
 import { ResultPanel } from './components/ResultPanel';
-import { createSession, sessionReducer, type Player } from './game/rules';
+import {
+  createSession,
+  makeConfig,
+  sessionReducer,
+  type DuoPlayer,
+} from './game/rules';
 import { useAiEngine } from './hooks/useAiEngine';
+import { useSkin } from './hooks/useSkin';
 import { useStats } from './hooks/useStats';
 import { playDrop, playWin } from './lib/sound';
 
@@ -16,24 +22,40 @@ const DEFAULT_CONFIG: MatchConfig = {
   mode: 'pve',
   difficulty: 'normal',
   humanFirst: true,
+  players: 2,
+  size: 6,
 };
+
+interface Series {
+  wins: number[];
+  draws: number;
+}
+
+function emptySeries(players: number): Series {
+  return { wins: new Array<number>(players).fill(0), draws: 0 };
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu');
-  const [config, setConfig] = useState<MatchConfig>(DEFAULT_CONFIG);
-  const [session, dispatch] = useReducer(sessionReducer, undefined, () => createSession());
+  const [match, setMatch] = useState<MatchConfig>(DEFAULT_CONFIG);
+  const [session, dispatch] = useReducer(sessionReducer, undefined, () =>
+    createSession(1, makeConfig(DEFAULT_CONFIG.size, 2)),
+  );
   const [thinking, setThinking] = useState(false);
   const [hint, setHint] = useState<number | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [resultVisible, setResultVisible] = useState(false);
+  const [series, setSeries] = useState<Series>(() => emptySeries(2));
 
   const requestMove = useAiEngine();
+  const { skinId, setSkinId } = useSkin();
   const { stats, record, reset: resetStats } = useStats();
 
   const state = session.current;
-  const aiPlayer: Player | null =
-    config.mode === 'pve' ? (config.humanFirst ? 2 : 1) : null;
+  const game = state.config;
+  const aiPlayer: DuoPlayer | null =
+    match.mode === 'pve' ? ((match.humanFirst ? 2 : 1) as DuoPlayer) : null;
   const isAiTurn = aiPlayer !== null && state.turn === aiPlayer;
   const recordedRef = useRef(false);
   const prevCountRef = useRef(0);
@@ -44,9 +66,21 @@ export default function App() {
     if (state.status === 'playing') return;
     if (recordedRef.current) return;
     recordedRef.current = true;
-    record(state.winner);
+
+    const winner = state.winner;
+    const players = state.config.players;
+    setSeries((prev) => {
+      const wins =
+        prev.wins.length === players ? [...prev.wins] : emptySeries(players).wins;
+      if (winner !== null) wins[winner - 1] += 1;
+      return { wins, draws: prev.draws + (winner === null ? 1 : 0) };
+    });
+
+    if (players === 2) {
+      record((winner ?? null) as DuoPlayer | null);
+    }
     if (state.status === 'won') playWin(soundOn);
-  }, [screen, state.status, state.winner, record, soundOn]);
+  }, [screen, state.status, state.winner, state.config.players, record, soundOn]);
 
   /* ---------- 结算面板延迟出现，先让玩家看清连成的那条线 ---------- */
   useEffect(() => {
@@ -66,7 +100,7 @@ export default function App() {
     }
     if (state.count > prevCountRef.current && state.last !== null) {
       const player = state.board[state.last];
-      if (player === 1 || player === 2) playDrop(player, soundOn);
+      if (player >= 1 && player <= 6) playDrop(player, soundOn);
     }
     prevCountRef.current = state.count;
   }, [screen, state, soundOn]);
@@ -83,7 +117,7 @@ export default function App() {
     setThinking(true);
 
     const timer = window.setTimeout(() => {
-      requestMove(state.board, state.heights, aiPlayer, config.difficulty)
+      requestMove(state.board, state.heights, aiPlayer, match.difficulty, game)
         .then((result) => {
           if (!cancelled && result.col >= 0) dispatch({ type: 'play', col: result.col });
         })
@@ -99,7 +133,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [screen, aiPlayer, state, config.difficulty, requestMove]);
+  }, [screen, aiPlayer, state, game, match.difficulty, requestMove]);
 
   /* ---------- 提示在落子后自动消失 ---------- */
   useEffect(() => {
@@ -108,12 +142,15 @@ export default function App() {
 
   /* ---------- 操作 ---------- */
   const startMatch = useCallback((next: MatchConfig) => {
-    setConfig(next);
-    dispatch({ type: 'reset' });
+    const nextGame = makeConfig(next.size, next.mode === 'pve' ? 2 : next.players);
+    setMatch(next);
+    dispatch({ type: 'reset', config: nextGame });
+    setSeries(emptySeries(nextGame.players));
     recordedRef.current = false;
     prevCountRef.current = 0;
     setHint(null);
     setThinking(false);
+    setResultVisible(false);
     setScreen('game');
   }, []);
 
@@ -130,9 +167,9 @@ export default function App() {
   const undo = useCallback(() => {
     if (thinking) return;
     if (state.status !== 'playing') return;
-    const steps = config.mode === 'pve' ? 2 : 1;
+    const steps = match.mode === 'pve' ? 2 : 1;
     dispatch({ type: 'undo', steps });
-  }, [thinking, state.status, config.mode]);
+  }, [thinking, state.status, match.mode]);
 
   const restart = useCallback(() => {
     dispatch({ type: 'reset' });
@@ -140,39 +177,51 @@ export default function App() {
     prevCountRef.current = 0;
     setHint(null);
     setThinking(false);
+    setResultVisible(false);
   }, []);
 
   const swap = useCallback(() => {
-    setConfig((prev) => ({ ...prev, humanFirst: !prev.humanFirst }));
+    setMatch((prev) => ({ ...prev, humanFirst: !prev.humanFirst }));
     dispatch({ type: 'reset' });
     recordedRef.current = false;
     prevCountRef.current = 0;
     setHint(null);
     setThinking(false);
+    setResultVisible(false);
   }, []);
 
   const askHint = useCallback(async () => {
     if (state.status !== 'playing' || thinking || hintLoading) return;
+    if (state.config.players !== 2) return;
     if (aiPlayer !== null && state.turn === aiPlayer) return;
     setHintLoading(true);
     try {
-      const result = await requestMove(state.board, state.heights, state.turn, 'hard');
+      const result = await requestMove(
+        state.board,
+        state.heights,
+        state.turn as DuoPlayer,
+        'hard',
+        game,
+      );
       if (result.col >= 0) setHint(result.col);
     } catch {
       /* 忽略 */
     } finally {
       setHintLoading(false);
     }
-  }, [state, thinking, hintLoading, aiPlayer, requestMove]);
+  }, [state, thinking, hintLoading, aiPlayer, requestMove, game]);
 
   /* ---------- 键盘 ---------- */
   useEffect(() => {
     if (screen !== 'game') return;
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key >= '1' && event.key <= '6') {
-        event.preventDefault();
-        play(Number(event.key) - 1);
+      if (event.key >= '0' && event.key <= '9') {
+        const col = event.key === '0' ? 9 : Number(event.key) - 1;
+        if (col < game.cols) {
+          event.preventDefault();
+          play(col);
+        }
       } else if (event.key === 'Escape') {
         event.preventDefault();
         undo();
@@ -183,13 +232,20 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [screen, play, undo, restart]);
+  }, [screen, play, undo, restart, game.cols]);
 
   /* ---------- 渲染 ---------- */
   if (screen === 'menu') {
     return (
       <div className="app">
-        <Menu stats={stats} onStart={startMatch} onResetStats={resetStats} />
+        <Menu
+          initial={match}
+          stats={stats}
+          skinId={skinId}
+          onSkinChange={setSkinId}
+          onStart={startMatch}
+          onResetStats={resetStats}
+        />
       </div>
     );
   }
@@ -197,10 +253,18 @@ export default function App() {
   const turnLabel = (() => {
     if (state.status === 'draw') return '和棋';
     if (state.status === 'won') return '对局结束';
-    if (config.mode === 'pvp') return state.turn === 1 ? '先手回合' : '后手回合';
-    if (thinking) return 'AI 思考中…';
-    return state.turn === aiPlayer ? 'AI 回合' : '你的回合';
+    if (match.mode === 'pve') {
+      if (thinking) return 'AI 思考中…';
+      return state.turn === aiPlayer ? 'AI 回合' : '你的回合';
+    }
+    if (game.players === 2) return state.turn === 1 ? '先手回合' : '后手回合';
+    return `玩家 ${state.turn} 回合`;
   })();
+
+  const modeLabel =
+    match.mode === 'pve'
+      ? `人机 · ${DIFFICULTY_LABELS[match.difficulty]} · ${game.cols}×${game.rows}`
+      : `本地 · ${game.players} 人 · ${game.cols}×${game.rows}`;
 
   return (
     <div className="app">
@@ -219,11 +283,7 @@ export default function App() {
               <span>LINK</span>
             </div>
             <span className="head-rule" />
-            <span className="head-mode">
-              {config.mode === 'pve'
-                ? `人机 · ${DIFFICULTY_LABELS[config.difficulty]}`
-                : '本地双人'}
-            </span>
+            <span className="head-mode">{modeLabel}</span>
           </div>
 
           <div className="status-row">
@@ -232,17 +292,16 @@ export default function App() {
               <span>{turnLabel}</span>
             </div>
 
-            <div className="score-inline" title="本机累计战绩">
-              <span className="score-item">
-                <i className="chip chip-p1" />
-                {stats.p1}
-              </span>
-              <span className="score-sep">–</span>
-              <span className="score-item">
-                <i className="chip chip-p2" />
-                {stats.p2}
-              </span>
-              <span className="score-draws">和 {stats.draws}</span>
+            <div className="score-inline" title="本场胜局">
+              {series.wins.map((wins, i) => (
+                <span className="score-item" key={i}>
+                  <i className={`chip chip-p${i + 1}`} />
+                  {wins}
+                </span>
+              ))}
+              {series.draws > 0 && (
+                <span className="score-draws">和 {series.draws}</span>
+              )}
             </div>
           </div>
         </header>
@@ -251,13 +310,13 @@ export default function App() {
           <Board
             state={state}
             disabled={thinking || isAiTurn}
-            hint={hint}
+            hint={game.players === 2 ? hint : null}
             onPlay={play}
           />
           <ResultPanel
             state={state}
-            mode={config.mode}
-            humanFirst={config.humanFirst}
+            mode={match.mode}
+            humanFirst={match.humanFirst}
             visible={resultVisible}
             onAgain={restart}
             onSwap={swap}
@@ -272,8 +331,15 @@ export default function App() {
           onToggleSound={() => setSoundOn((v) => !v)}
           soundOn={soundOn}
           canUndo={state.status === 'playing' && session.past.length > 0 && !thinking}
-          canHint={state.status === 'playing' && !thinking && !hintLoading && !isAiTurn}
+          canHint={
+            game.players === 2 &&
+            state.status === 'playing' &&
+            !thinking &&
+            !hintLoading &&
+            !isAiTurn
+          }
           hintLoading={hintLoading}
+          showHint={game.players === 2}
         />
       </main>
     </div>

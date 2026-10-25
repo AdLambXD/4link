@@ -1,18 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOARD_SIZES,
   CELL_COUNT,
   COLS,
   ROWS,
+  SIZE_WIN,
   createGame,
   drop,
   legalMoves,
   lineAt,
+  makeConfig,
+  normalizeConfig,
   type GameState,
 } from './rules';
 
 /** 依次落子，返回最终状态 */
-function play(cols: number[]): GameState {
-  let state = createGame();
+function play(cols: number[], players = 2): GameState {
+  let state = createGame(1, makeConfig(6, players));
   for (const col of cols) state = drop(state, col);
   return state;
 }
@@ -26,6 +30,35 @@ describe('createGame', () => {
     expect(g.turn).toBe(1);
     expect(g.status).toBe('playing');
     expect(g.count).toBe(0);
+    expect(g.config.win).toBe(4);
+    expect(g.config.players).toBe(2);
+  });
+
+  it('按尺寸生成 8×8 / 16×16', () => {
+    const g8 = createGame(1, makeConfig(8, 2));
+    expect(g8.board).toHaveLength(64);
+    expect(g8.heights).toHaveLength(8);
+    expect(g8.config.win).toBe(4);
+
+    const g16 = createGame(1, makeConfig(16, 4));
+    expect(g16.board).toHaveLength(256);
+    expect(g16.heights).toHaveLength(16);
+    expect(g16.config.win).toBe(5);
+    expect(g16.config.players).toBe(4);
+  });
+
+  it('配置会被收敛到合法范围', () => {
+    const g = createGame(1, normalizeConfig({ cols: 10, rows: 10, win: 20, players: 99 }));
+    expect(g.config.win).toBe(10);
+    expect(g.config.players).toBe(6);
+  });
+
+  it('尺寸与连子数映射固定', () => {
+    expect(BOARD_SIZES).toEqual([6, 8, 12, 16]);
+    expect(SIZE_WIN[6]).toBe(4);
+    expect(SIZE_WIN[8]).toBe(4);
+    expect(SIZE_WIN[12]).toBe(5);
+    expect(SIZE_WIN[16]).toBe(5);
   });
 });
 
@@ -69,6 +102,29 @@ describe('重力落子', () => {
     }
     expect(p1).toBe(3);
     expect(p2).toBe(3);
+  });
+
+  it('3 人按 1 → 2 → 3 → 1 轮转', () => {
+    let g = createGame(1, makeConfig(6, 3));
+    expect(g.turn).toBe(1);
+    g = drop(g, 0);
+    expect(g.turn).toBe(2);
+    g = drop(g, 1);
+    expect(g.turn).toBe(3);
+    g = drop(g, 2);
+    expect(g.turn).toBe(1);
+    g = drop(g, 3);
+    expect(g.turn).toBe(2);
+  });
+
+  it('6 人时轮转一整圈回到先手', () => {
+    let g = createGame(1, makeConfig(6, 6));
+    for (let i = 0; i < 5; i++) {
+      g = drop(g, i);
+      expect(g.turn).toBe(i + 2);
+    }
+    g = drop(g, 5);
+    expect(g.turn).toBe(1);
   });
 });
 
@@ -117,13 +173,31 @@ describe('胜负判定', () => {
     expect(line).toHaveLength(5);
   });
 
+  it('3 人局中 1 号玩家横四获胜', () => {
+    const g = play([0, 5, 5, 1, 5, 4, 2, 4, 4, 3], 3);
+    expect(g.status).toBe('won');
+    expect(g.winner).toBe(1);
+    expect(g.count).toBe(10);
+    expect(g.winLine).toEqual([0, 1, 2, 3]);
+    expect(g.turn).toBe(1);
+  });
+
+  it('12×12 需要连 5 个', () => {
+    const config = makeConfig(12, 2);
+    const board = new Array<0 | 1 | 2>(144).fill(0);
+    for (let c = 0; c < 4; c++) board[c] = 1;
+    expect(lineAt(board, 0, 1, 1, config)).toBeNull();
+    board[4] = 1;
+    expect(lineAt(board, 0, 2, 1, config)).toHaveLength(5);
+  });
+
   it('分出胜负后 turn 停留在获胜方', () => {
     const g = play([0, 5, 1, 5, 2, 5, 3]);
     expect(g.turn).toBe(1);
   });
 });
 
-describe('perft（前 6 层应为 6 的幂）', () => {
+describe('perft', () => {
   function perft(state: GameState, depth: number): number {
     if (depth === 0 || state.status !== 'playing') return 1;
     let total = 0;
@@ -131,9 +205,17 @@ describe('perft（前 6 层应为 6 的幂）', () => {
     return total;
   }
 
-  it('1..6 层', () => {
+  it('6×6 前 6 层应为 6 的幂', () => {
     const g = createGame();
     const expected = [6, 36, 216, 1296, 7776, 46656];
+    for (let d = 1; d <= expected.length; d++) {
+      expect(perft(g, d)).toBe(expected[d - 1]);
+    }
+  });
+
+  it('8×8 前 3 层应为 8 的幂', () => {
+    const g = createGame(1, makeConfig(8, 2));
+    const expected = [8, 64, 512];
     for (let d = 1; d <= expected.length; d++) {
       expect(perft(g, d)).toBe(expected[d - 1]);
     }

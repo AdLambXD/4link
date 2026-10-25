@@ -21,21 +21,25 @@ export function ResultPanel({
 }: ResultPanelProps) {
   if (state.status === 'playing' || !visible) return null;
 
+  const { players, win } = state.config;
   const human = humanFirst ? 1 : 2;
   const draw = state.status === 'draw';
   const winner = state.winner;
 
   let title: string;
-  let tone: 'p1' | 'p2' | 'draw';
-  if (draw) {
+  let tone: string;
+  if (draw || winner === null) {
     title = '和棋';
     tone = 'draw';
   } else if (mode === 'pve') {
     title = winner === human ? '你赢了' : 'AI 获胜';
-    tone = winner === 1 ? 'p1' : 'p2';
-  } else {
+    tone = `p${winner}`;
+  } else if (players === 2) {
     title = winner === 1 ? '先手获胜' : '后手获胜';
-    tone = winner === 1 ? 'p1' : 'p2';
+    tone = `p${winner}`;
+  } else {
+    title = `玩家 ${winner} 获胜`;
+    tone = `p${winner}`;
   }
 
   return (
@@ -49,7 +53,9 @@ export function ResultPanel({
         <div className="slip-body">
           <span className={`slip-disc ${tone}`} />
           <h2>{title}</h2>
-          <p>{draw ? '棋盘已满，无人连成四子' : '四子连线'}</p>
+          <p>
+            {draw ? `棋盘已满，无人连成 ${win} 子` : `${win} 子连线`}
+          </p>
         </div>
 
         <div className="slip-actions">

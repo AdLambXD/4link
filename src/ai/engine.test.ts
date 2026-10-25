@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CELL_COUNT, COLS } from '../game/rules';
+import { CELL_COUNT, COLS, makeConfig } from '../game/rules';
 import { chooseMove, type Difficulty } from './engine';
 
 function emptyBoard(): number[] {
@@ -58,5 +58,42 @@ describe('chooseMove', () => {
     for (let i = 0; i < CELL_COUNT; i++) board[i] = (i % 2) + 1;
     const result = chooseMove(board, [6, 6, 6, 6, 6, 6], 1, 'normal');
     expect(result.col).toBe(-1);
+  });
+
+  it('8×8 仍能识别一手横四', () => {
+    const config = makeConfig(8, 2);
+    const board = new Array<number>(64).fill(0);
+    board[0] = 1;
+    board[1] = 1;
+    board[2] = 1;
+    const result = chooseMove(board, [1, 1, 1, 0, 0, 0, 0, 0], 1, 'normal', config);
+    expect(result.col).toBe(3);
+  });
+
+  it('12×12 能识别第五子的一手胜', () => {
+    const config = makeConfig(12, 2);
+    const board = new Array<number>(144).fill(0);
+    for (let c = 0; c < 4; c++) board[c] = 1;
+    const result = chooseMove(
+      board,
+      [1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+      1,
+      'normal',
+      config,
+    );
+    expect(result.col).toBe(4);
+  });
+
+  it('16×16 空盘返回中心列', () => {
+    const config = makeConfig(16, 2);
+    const result = chooseMove(
+      new Array<number>(256).fill(0),
+      new Array<number>(16).fill(0),
+      1,
+      'easy',
+      config,
+    );
+    expect(result.col).toBeGreaterThanOrEqual(6);
+    expect(result.col).toBeLessThanOrEqual(9);
   });
 });

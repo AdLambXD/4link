@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Difficulty, MoveResult } from '../ai/engine';
-import type { Player } from '../game/rules';
+import type { DuoPlayer, GameConfig } from '../game/rules';
 
 interface Pending {
   resolve: (result: MoveResult) => void;
@@ -47,7 +47,13 @@ export function useAiEngine() {
   }, []);
 
   return useCallback(
-    (board: readonly number[], heights: readonly number[], player: Player, difficulty: Difficulty) => {
+    (
+      board: readonly number[],
+      heights: readonly number[],
+      player: DuoPlayer,
+      difficulty: Difficulty,
+      config: GameConfig,
+    ) => {
       return new Promise<MoveResult>((resolve, reject) => {
         const worker = workerRef.current;
         if (!worker) {
@@ -62,6 +68,7 @@ export function useAiEngine() {
           heights: Array.from(heights),
           player,
           difficulty,
+          config,
         });
       });
     },
