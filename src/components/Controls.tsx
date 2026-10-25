@@ -1,3 +1,5 @@
+import { BulbIcon, RestartIcon, SpeakerIcon, SpeakerOffIcon, UndoIcon } from './Icons';
+
 interface ControlsProps {
   onUndo: () => void;
   onRestart: () => void;
@@ -21,22 +23,27 @@ export function Controls({
 }: ControlsProps) {
   return (
     <div className="controls">
-      <button className="btn" onClick={onUndo} disabled={!canUndo}>
-        悔棋 <kbd>Esc</kbd>
+      <button className="ticket" onClick={onUndo} disabled={!canUndo}>
+        <UndoIcon />
+        <span>悔棋</span>
+        <kbd>Esc</kbd>
       </button>
-      <button className="btn" onClick={onRestart}>
-        重开 <kbd>R</kbd>
+      <button className="ticket" onClick={onRestart}>
+        <RestartIcon />
+        <span>重开</span>
+        <kbd>R</kbd>
       </button>
-      <button className="btn" onClick={onHint} disabled={!canHint}>
-        {hintLoading ? '思考中…' : '提示'}
+      <button className="ticket" onClick={onHint} disabled={!canHint}>
+        <BulbIcon />
+        <span>{hintLoading ? '思考中' : '提示'}</span>
       </button>
       <button
-        className="btn quiet sound"
+        className="ticket ticket-icon"
         onClick={onToggleSound}
         aria-pressed={soundOn}
         aria-label={soundOn ? '关闭音效' : '开启音效'}
       >
-        {soundOn ? '🔊' : '🔇'}
+        {soundOn ? <SpeakerIcon /> : <SpeakerOffIcon />}
       </button>
     </div>
   );

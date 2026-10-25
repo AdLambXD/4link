@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { DIFFICULTY_LABELS } from './ai/engine';
 import { Board } from './components/Board';
 import { Controls } from './components/Controls';
+import { ArrowLeftIcon } from './components/Icons';
 import { Menu, type MatchConfig } from './components/Menu';
 import { ResultPanel } from './components/ResultPanel';
 import { createSession, sessionReducer, type Player } from './game/rules';
@@ -195,7 +197,7 @@ export default function App() {
   const turnLabel = (() => {
     if (state.status === 'draw') return '和棋';
     if (state.status === 'won') return '对局结束';
-    if (config.mode === 'pvp') return state.turn === 1 ? '先手 ● 回合' : '后手 ○ 回合';
+    if (config.mode === 'pvp') return state.turn === 1 ? '先手回合' : '后手回合';
     if (thinking) return 'AI 思考中…';
     return state.turn === aiPlayer ? 'AI 回合' : '你的回合';
   })();
@@ -203,25 +205,45 @@ export default function App() {
   return (
     <div className="app">
       <main className="game">
-        <header className="hud">
-          <button
-            className="icon-btn"
-            onClick={() => setScreen('menu')}
-            aria-label="返回菜单"
-          >
-            ←
-          </button>
-
-          <div className="turn">
-            <span className={`dot p${state.turn}`} />
-            <span>{turnLabel}</span>
+        <header className="game-head">
+          <div className="head-row">
+            <button
+              className="back-btn"
+              onClick={() => setScreen('menu')}
+              aria-label="返回菜单"
+            >
+              <ArrowLeftIcon />
+            </button>
+            <div className="head-brand">
+              <span className="wordmark-4">4</span>
+              <span>LINK</span>
+            </div>
+            <span className="head-rule" />
+            <span className="head-mode">
+              {config.mode === 'pve'
+                ? `人机 · ${DIFFICULTY_LABELS[config.difficulty]}`
+                : '本地双人'}
+            </span>
           </div>
 
-          <div className="score" title="本机累计战绩">
-            <span className="stat p1">● {stats.p1}</span>
-            <span className="sep">:</span>
-            <span className="stat p2">{stats.p2} ○</span>
-            <span className="draws">和 {stats.draws}</span>
+          <div className="status-row">
+            <div className="turn-chip">
+              <span className={`turn-dot p${state.turn}`} />
+              <span>{turnLabel}</span>
+            </div>
+
+            <div className="score-inline" title="本机累计战绩">
+              <span className="score-item">
+                <i className="chip chip-p1" />
+                {stats.p1}
+              </span>
+              <span className="score-sep">–</span>
+              <span className="score-item">
+                <i className="chip chip-p2" />
+                {stats.p2}
+              </span>
+              <span className="score-draws">和 {stats.draws}</span>
+            </div>
           </div>
         </header>
 

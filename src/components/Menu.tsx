@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DIFFICULTY_LABELS, type Difficulty } from '../ai/engine';
 import type { Stats } from '../hooks/useStats';
+import { ArrowRightIcon } from './Icons';
 
 export interface MatchConfig {
   mode: 'pvp' | 'pve';
@@ -20,88 +21,123 @@ export function Menu({ stats, onStart, onResetStats }: MenuProps) {
   const [humanFirst, setHumanFirst] = useState(true);
 
   return (
-    <main className="menu">
-      <div className="brand">
-        <div className="logo">
-          <span className="logo-4">4</span>
-          <span className="logo-link">Link</span>
+    <main className="poster">
+      <header className="masthead">
+        <div className="masthead-row">
+          <h1 className="wordmark">
+            <span className="wordmark-4">4</span>
+            <span>LINK</span>
+          </h1>
+          <span className="issue">NO. 04</span>
         </div>
-        <p className="tagline">四连引力 · Drop. Stack. Link.</p>
-      </div>
+        <p className="kicker">Four in a row · 四连引力 · 重力棋盘</p>
+        <div className="rule" />
+      </header>
 
-      <div className="card">
-        <section className="field">
-          <h3>对战模式</h3>
-          <div className="segmented">
-            <button className={mode === 'pve' ? 'on' : ''} onClick={() => setMode('pve')}>
-              人机对战
-            </button>
-            <button className={mode === 'pvp' ? 'on' : ''} onClick={() => setMode('pvp')}>
-              本地双人
-            </button>
-          </div>
-        </section>
-
-        {mode === 'pve' && (
-          <>
-            <section className="field">
-              <h3>难度</h3>
-              <div className="segmented">
-                {(['easy', 'normal', 'hard'] as const).map((level) => (
-                  <button
-                    key={level}
-                    className={difficulty === level ? 'on' : ''}
-                    onClick={() => setDifficulty(level)}
-                  >
-                    {DIFFICULTY_LABELS[level]}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="field">
-              <h3>谁先手</h3>
-              <div className="segmented">
-                <button className={humanFirst ? 'on' : ''} onClick={() => setHumanFirst(true)}>
-                  我先手
-                </button>
-                <button className={!humanFirst ? 'on' : ''} onClick={() => setHumanFirst(false)}>
-                  AI 先手
-                </button>
-              </div>
-            </section>
-          </>
-        )}
-
-        <button
-          className="btn primary start"
-          onClick={() => onStart({ mode, difficulty, humanFirst })}
-        >
-          开始对局
-        </button>
-
-        <div className="stats-row">
-          <span className="stat-label">战绩</span>
-          <span className="stat p1">● {stats.p1}</span>
-          <span className="stat p2">○ {stats.p2}</span>
-          <span className="stat">和 {stats.draws}</span>
-          <button className="link" onClick={onResetStats}>
-            清零
+      <section className="block">
+        <div className="block-head">
+          <span className="block-num">01</span>
+          <h2>对战模式</h2>
+        </div>
+        <div className="choices choices-2">
+          <button
+            className={`choice${mode === 'pve' ? ' is-on' : ''}`}
+            onClick={() => setMode('pve')}
+          >
+            <span className="choice-main">人机对战</span>
+            <span className="choice-note">SOLO</span>
+          </button>
+          <button
+            className={`choice${mode === 'pvp' ? ' is-on' : ''}`}
+            onClick={() => setMode('pvp')}
+          >
+            <span className="choice-main">本地双人</span>
+            <span className="choice-note">LOCAL</span>
           </button>
         </div>
+      </section>
+
+      {mode === 'pve' && (
+        <>
+          <section className="block">
+            <div className="block-head">
+              <span className="block-num">02</span>
+              <h2>难度</h2>
+            </div>
+            <div className="choices choices-3">
+              {(['easy', 'normal', 'hard'] as const).map((level) => (
+                <button
+                  key={level}
+                  className={`choice${difficulty === level ? ' is-on' : ''}`}
+                  onClick={() => setDifficulty(level)}
+                >
+                  <span className="choice-main">{DIFFICULTY_LABELS[level]}</span>
+                  <span className="choice-note">{level.toUpperCase()}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="block">
+            <div className="block-head">
+              <span className="block-num">03</span>
+              <h2>谁先手</h2>
+            </div>
+            <div className="choices choices-2">
+              <button
+                className={`choice${humanFirst ? ' is-on' : ''}`}
+                onClick={() => setHumanFirst(true)}
+              >
+                <span className="choice-main">我先手</span>
+                <span className="choice-note">FIRST</span>
+              </button>
+              <button
+                className={`choice${!humanFirst ? ' is-on' : ''}`}
+                onClick={() => setHumanFirst(false)}
+              >
+                <span className="choice-main">AI 先手</span>
+                <span className="choice-note">SECOND</span>
+              </button>
+            </div>
+          </section>
+        </>
+      )}
+
+      <button
+        className="start-btn"
+        onClick={() => onStart({ mode, difficulty, humanFirst })}
+      >
+        <span>开始对局</span>
+        <ArrowRightIcon />
+      </button>
+
+      <div className="scorecard">
+        <span className="scorecard-title">战绩</span>
+        <span className="score-item">
+          <i className="chip chip-p1" />
+          {stats.p1}
+        </span>
+        <span className="score-item">
+          <i className="chip chip-p2" />
+          {stats.p2}
+        </span>
+        <span className="score-item score-draw">和 {stats.draws}</span>
+        <button className="text-btn" onClick={onResetStats}>
+          清零
+        </button>
       </div>
 
-      <details className="rules">
-        <summary>怎么玩？</summary>
+      <details className="notes">
+        <summary>怎么玩</summary>
         <ul>
-          <li>6×6 棋盘，轮流选一列落子，棋子会落到底。</li>
+          <li>6×6 棋盘，轮流选一列落子，棋子落到底。</li>
           <li>横、竖、两条斜线，任意方向连成 4 个即获胜。</li>
           <li>棋盘下满仍无人连成 4 个，判和棋。</li>
-          <li>技巧：先抢中间两列，特别小心斜线和双威胁。</li>
+          <li>先抢中间两列；斜线和双威胁最容易漏防。</li>
         </ul>
       </details>
 
-      <p className="footnote">键盘 1–6 落子 · Esc 悔棋 · R 重开</p>
+      <p className="colophon">键盘 1–6 落子 · ESC 悔棋 · R 重开</p>
     </main>
   );
 }
