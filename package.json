@@ -1,9 +1,9 @@
 {
   "name": "4link",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
-  "description": "4Link · 四连引力 —— 方形重力棋盘上的 2–6 人连线游戏与残局谜题",
+  "description": "4Link · 四连引力 —— 方形重力棋盘上的 2–6 人连线游戏、残局谜题与整站外观自定义",
   "engines": {
     "node": ">=22.12.0"
   },

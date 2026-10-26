@@ -2,10 +2,11 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { DIFFICULTY_LABELS } from './ai/engine';
 import { Board } from './components/Board';
 import { Controls } from './components/Controls';
-import { ArrowLeftIcon } from './components/Icons';
+import { ArrowLeftIcon, SettingsIcon } from './components/Icons';
 import { Menu, type MatchConfig } from './components/Menu';
 import { PuzzlePanel } from './components/PuzzlePanel';
 import { ResultPanel } from './components/ResultPanel';
+import { Settings } from './components/Settings';
 import {
   PUZZLES,
   createPuzzleState,
@@ -20,8 +21,8 @@ import {
   type DuoPlayer,
 } from './game/rules';
 import { useAiEngine } from './hooks/useAiEngine';
+import { useAppearance } from './hooks/useAppearance';
 import { usePuzzleProgress } from './hooks/usePuzzleProgress';
-import { useSkin } from './hooks/useSkin';
 import { useStats } from './hooks/useStats';
 import { playDrop, playWin } from './lib/sound';
 
@@ -47,6 +48,7 @@ function emptySeries(players: number): Series {
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('menu');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [match, setMatch] = useState<MatchConfig>(DEFAULT_CONFIG);
   const [session, dispatch] = useReducer(sessionReducer, undefined, () =>
     createSession(1, makeConfig(DEFAULT_CONFIG.size, 2)),
@@ -63,7 +65,14 @@ export default function App() {
   const [puzzleNotice, setPuzzleNotice] = useState<string | null>(null);
 
   const requestMove = useAiEngine();
-  const { skinId, setSkinId } = useSkin();
+  const {
+    skin,
+    pieces,
+    setSkinId,
+    setPieceColor,
+    setPieceImage,
+    resetPieces,
+  } = useAppearance();
   const { stats, record, reset: resetStats } = useStats();
   const {
     progress: puzzleProgress,
@@ -377,8 +386,11 @@ export default function App() {
   ]);
 
   /* ---------- 键盘 ---------- */
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+
   useEffect(() => {
-    if (screen !== 'game') return;
+    if (screen !== 'game' || settingsOpen) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key >= '0' && event.key <= '9') {
@@ -397,9 +409,21 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [screen, play, undo, restart, game.cols]);
+  }, [screen, settingsOpen, play, undo, restart, game.cols]);
 
   /* ---------- 渲染 ---------- */
+  const settingsOverlay = settingsOpen ? (
+    <Settings
+      skin={skin}
+      pieces={pieces}
+      onSkinChange={setSkinId}
+      onPieceColorChange={setPieceColor}
+      onPieceImageChange={setPieceImage}
+      onResetPieces={resetPieces}
+      onClose={closeSettings}
+    />
+  ) : null;
+
   if (screen === 'menu') {
     return (
       <div className="app">
@@ -407,12 +431,14 @@ export default function App() {
           initial={match}
           stats={stats}
           puzzleProgress={puzzleProgress}
-          skinId={skinId}
-          onSkinChange={setSkinId}
+          skin={skin}
+          pieces={pieces}
+          onOpenSettings={openSettings}
           onStart={startMatch}
           onResetStats={resetStats}
           onResetPuzzles={resetPuzzles}
         />
+        {settingsOverlay}
       </div>
     );
   }
@@ -486,6 +512,14 @@ export default function App() {
             </div>
             <span className="head-rule" />
             <span className="head-mode">{modeLabel}</span>
+            <button
+              type="button"
+              className="settings-trigger head-settings"
+              onClick={openSettings}
+              aria-label="打开设置"
+            >
+              <SettingsIcon size={15} />
+            </button>
           </div>
 
           <div className="status-row">
@@ -579,6 +613,7 @@ export default function App() {
           showHint={game.players === 2}
         />
       </main>
+      {settingsOverlay}
     </div>
   );
 }

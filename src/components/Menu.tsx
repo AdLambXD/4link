@@ -4,8 +4,14 @@ import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
 import type { PuzzleProgress, PuzzleRecord } from '../hooks/usePuzzleProgress';
 import type { Stats } from '../hooks/useStats';
-import { SKINS, getSkin, type SkinId } from '../skins';
-import { ArrowRightIcon } from './Icons';
+import {
+  PLAYER_NUMBERS,
+  hasPieceCustomization,
+  pieceColor,
+  type PieceCustomization,
+} from '../pieces';
+import type { Skin } from '../skins';
+import { ArrowRightIcon, SettingsIcon } from './Icons';
 
 export interface MatchConfig {
   mode: 'pvp' | 'pve' | 'puzzle';
@@ -20,8 +26,9 @@ interface MenuProps {
   initial: MatchConfig;
   stats: Stats;
   puzzleProgress: PuzzleProgress;
-  skinId: SkinId;
-  onSkinChange: (id: SkinId) => void;
+  skin: Skin;
+  pieces: PieceCustomization;
+  onOpenSettings: () => void;
   onStart: (config: MatchConfig) => void;
   onResetStats: () => void;
   onResetPuzzles: () => void;
@@ -38,8 +45,9 @@ export function Menu({
   initial,
   stats,
   puzzleProgress,
-  skinId,
-  onSkinChange,
+  skin,
+  pieces,
+  onOpenSettings,
   onStart,
   onResetStats,
   onResetPuzzles,
@@ -60,6 +68,7 @@ export function Menu({
   const bestSolved = solvedRecords.length
     ? Math.min(...solvedRecords.map((record) => record.best))
     : null;
+  const customPieces = hasPieceCustomization(pieces);
 
   let step = 0;
   const num = () => String(++step).padStart(2, '0');
@@ -83,7 +92,17 @@ export function Menu({
             <span className="wordmark-4">4</span>
             <span>LINK</span>
           </h1>
-          <span className="issue">NO. 05</span>
+          <div className="masthead-side">
+            <span className="issue">NO. 06</span>
+            <button
+              type="button"
+              className="settings-trigger"
+              onClick={onOpenSettings}
+              aria-label="打开设置"
+            >
+              <SettingsIcon />
+            </button>
+          </div>
         </div>
         <p className="kicker">Four in a row · 四连引力 · 重力棋盘</p>
         <div className="rule" />
@@ -262,31 +281,58 @@ export function Menu({
       <section className="block">
         <div className="block-head">
           <span className="block-num">{num()}</span>
-          <h2>棋盘皮肤</h2>
+          <h2>外观</h2>
         </div>
-        <div className="choices choices-2">
-          {SKINS.map((skin) => {
-            const preview = getSkin(skin.id);
-            return (
-              <button
-                key={skin.id}
-                className={`choice choice-skin${skinId === skin.id ? ' is-on' : ''}`}
-                onClick={() => onSkinChange(skin.id)}
-              >
-                <span className="skin-swatch" aria-hidden="true">
-                  <i style={{ background: preview.vars['--board-face'] }} />
-                  <i style={{ background: preview.vars['--p1'] }} />
-                  <i style={{ background: preview.vars['--p2'] }} />
-                  <i style={{ background: preview.vars['--p3'] }} />
-                </span>
-                <span className="skin-name">
-                  <span className="choice-main">{skin.name}</span>
-                  <span className="choice-note">{skin.note}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <button
+          type="button"
+          className="appearance-card"
+          onClick={onOpenSettings}
+        >
+          <span
+            className="appearance-preview"
+            style={{
+              backgroundColor: skin.vars['--paper'],
+              borderColor: skin.vars['--rule'],
+            }}
+            aria-hidden="true"
+          >
+            <span
+              className="appearance-board"
+              style={{
+                backgroundColor: skin.vars['--board-face'],
+                borderColor: skin.vars['--board-edge'],
+              }}
+            >
+              {PLAYER_NUMBERS.slice(0, 3).map((player) => {
+                const image = pieces.images[player];
+                return (
+                  <i
+                    key={player}
+                    style={{
+                      backgroundColor: pieceColor(skin, pieces, player),
+                      backgroundImage: image ? `url("${image}")` : undefined,
+                    }}
+                  />
+                );
+              })}
+            </span>
+            <span className="appearance-type" aria-hidden="true">
+              <i style={{ backgroundColor: skin.vars['--ink'] }} />
+              <i style={{ backgroundColor: skin.vars['--accent'] }} />
+            </span>
+          </span>
+          <span className="appearance-info">
+            <span className="choice-main">{skin.name}主题</span>
+            <span className="choice-note">{skin.note} · 整站风格</span>
+            <span className="appearance-meta">
+              {customPieces ? '棋子已自定义' : '主题、棋子颜色与图片'}
+            </span>
+          </span>
+          <span className="appearance-open">
+            <SettingsIcon size={14} />
+            设置
+          </span>
+        </button>
       </section>
 
       <button className="start-btn" onClick={start}>
@@ -341,6 +387,7 @@ export function Menu({
               <li>先抢中间列；斜线和双威胁最容易漏防。</li>
             </>
           )}
+          <li>主题、棋子颜色和图片在设置中调整；选择会保存在本机。</li>
         </ul>
       </details>
 
