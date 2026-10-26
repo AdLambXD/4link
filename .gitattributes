@@ -1,0 +1,4 @@
+# 启动脚本对换行符敏感：Linux 脚本必须 LF，Windows 批处理用 CRLF。
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
