@@ -29,6 +29,32 @@ npm run preview  # 预览构建产物
 npm test         # 规则与 AI 单元测试
 ```
 
+## 一键启动
+
+| 系统 | 文件 | 用法 |
+| --- | --- | --- |
+| Windows | `start-windows.bat` | 双击运行 |
+| Linux / macOS | `start-linux.sh` | `chmod +x start-linux.sh && ./start-linux.sh` |
+
+脚本会检查 Node.js 版本，首次运行时自动 `npm install`，然后启动开发服务器并打开浏览器。关闭窗口或按 `Ctrl+C` 停止。
+
+如果脚本在 Linux 上提示权限不足：
+
+```bash
+chmod +x start-linux.sh
+```
+
+## GitHub Pages 部署
+
+仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages。
+
+1. 打开仓库的 **Settings → Pages**。
+2. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
+3. 推送代码到 `main`，或在 **Actions → Deploy to GitHub Pages** 手动运行。
+4. 部署完成后访问 `https://<用户名>.github.io/<仓库名>/`，本项目为 `https://adlambxd.github.io/4link/`。
+
+构建时的资源前缀会自动从仓库名推导，因此仓库改名或 fork 后无需改代码。若使用自定义域名，请在 **Settings → Secrets and variables → Actions → Variables** 添加 `BASE_PATH`，值为 `/`。
+
 ## 玩法
 
 1. 棋盘是正方形。列标从左到右为 `A`–`Q`（跳过 `I`），行号从下往上为 `1`–`16`。
@@ -61,6 +87,11 @@ npm test         # 规则与 AI 单元测试
 ## 项目结构
 
 ```
+.github/
+└─ workflows/deploy.yml  # GitHub Pages 自动部署
+start-windows.bat        # Windows 一键启动
+start-linux.sh           # Linux / macOS 一键启动
+vite.config.ts           # Vite 配置（自动适配 Pages 子路径）
 src/
 ├─ game/
 │  ├─ rules.ts          # 纯函数规则：尺寸/人数配置、落子、判胜、和棋、悔棋 reducer
