@@ -4,7 +4,15 @@ import { Board } from './components/Board';
 import { Controls } from './components/Controls';
 import { ArrowLeftIcon } from './components/Icons';
 import { Menu, type MatchConfig } from './components/Menu';
+import { PuzzlePanel } from './components/PuzzlePanel';
 import { ResultPanel } from './components/ResultPanel';
+import {
+  PUZZLES,
+  createPuzzleState,
+  findBestMove,
+  getNextPuzzle,
+  getPuzzle,
+} from './game/puzzle';
 import {
   createSession,
   makeConfig,
@@ -12,6 +20,7 @@ import {
   type DuoPlayer,
 } from './game/rules';
 import { useAiEngine } from './hooks/useAiEngine';
+import { usePuzzleProgress } from './hooks/usePuzzleProgress';
 import { useSkin } from './hooks/useSkin';
 import { useStats } from './hooks/useStats';
 import { playDrop, playWin } from './lib/sound';
@@ -24,6 +33,7 @@ const DEFAULT_CONFIG: MatchConfig = {
   humanFirst: true,
   players: 2,
   size: 6,
+  puzzleId: null,
 };
 
 interface Series {
@@ -47,25 +57,49 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [resultVisible, setResultVisible] = useState(false);
   const [series, setSeries] = useState<Series>(() => emptySeries(2));
+  const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [puzzleHints, setPuzzleHints] = useState(0);
+  const [puzzleExhausted, setPuzzleExhausted] = useState(false);
+  const [puzzleNotice, setPuzzleNotice] = useState<string | null>(null);
 
   const requestMove = useAiEngine();
   const { skinId, setSkinId } = useSkin();
   const { stats, record, reset: resetStats } = useStats();
+  const {
+    progress: puzzleProgress,
+    recordSolve,
+    reset: resetPuzzles,
+  } = usePuzzleProgress();
 
   const state = session.current;
   const game = state.config;
+  const puzzle = match.mode === 'puzzle' ? getPuzzle(match.puzzleId) ?? PUZZLES[0] : null;
   const aiPlayer: DuoPlayer | null =
     match.mode === 'pve' ? ((match.humanFirst ? 2 : 1) as DuoPlayer) : null;
   const isAiTurn = aiPlayer !== null && state.turn === aiPlayer;
+  const humanMoves = Math.ceil(session.past.length / 2);
+  const remainingMoves = puzzle ? Math.max(0, puzzle.moveLimit - humanMoves) : 0;
+  const usedMoves = puzzle ? Math.min(humanMoves, puzzle.moveLimit) : humanMoves;
+  const nextPuzzle = puzzle ? getNextPuzzle(puzzle.id) : null;
   const recordedRef = useRef(false);
   const prevCountRef = useRef(0);
 
   /* ---------- 结算 ---------- */
   useEffect(() => {
     if (screen !== 'game') return;
-    if (state.status === 'playing') return;
+    if (state.status === 'playing' && !puzzleExhausted) return;
     if (recordedRef.current) return;
     recordedRef.current = true;
+
+    if (match.mode === 'puzzle') {
+      if (!puzzle) return;
+      if (state.status === 'won' && state.winner === puzzle.human) {
+        setPuzzleSolved(true);
+        recordSolve(puzzle.id, Math.ceil(session.past.length / 2), puzzleHints);
+        playWin(soundOn);
+      }
+      return;
+    }
 
     const winner = state.winner;
     const players = state.config.players;
@@ -80,17 +114,30 @@ export default function App() {
       record((winner ?? null) as DuoPlayer | null);
     }
     if (state.status === 'won') playWin(soundOn);
-  }, [screen, state.status, state.winner, state.config.players, record, soundOn]);
+  }, [
+    screen,
+    state.status,
+    state.winner,
+    state.config.players,
+    record,
+    soundOn,
+    match.mode,
+    puzzle,
+    puzzleExhausted,
+    session.past.length,
+    puzzleHints,
+    recordSolve,
+  ]);
 
   /* ---------- 结算面板延迟出现，先让玩家看清连成的那条线 ---------- */
   useEffect(() => {
-    if (state.status === 'playing') {
+    if (screen !== 'game' || (state.status === 'playing' && !puzzleExhausted)) {
       setResultVisible(false);
       return;
     }
     const timer = window.setTimeout(() => setResultVisible(true), 900);
     return () => window.clearTimeout(timer);
-  }, [state.status, state.count]);
+  }, [screen, state.status, state.count, puzzleExhausted]);
 
   /* ---------- 落子音效 ---------- */
   useEffect(() => {
@@ -105,7 +152,7 @@ export default function App() {
     prevCountRef.current = state.count;
   }, [screen, state, soundOn]);
 
-  /* ---------- AI 行动 ---------- */
+  /* ---------- 常规 AI 行动 ---------- */
   useEffect(() => {
     if (screen !== 'game' || aiPlayer === null) return;
     if (state.status !== 'playing' || state.turn !== aiPlayer) {
@@ -135,6 +182,57 @@ export default function App() {
     };
   }, [screen, aiPlayer, state, game, match.difficulty, requestMove]);
 
+  /* ---------- 谜题 AI 防守 ---------- */
+  useEffect(() => {
+    if (screen !== 'game' || match.mode !== 'puzzle' || !puzzle || puzzleExhausted) {
+      return;
+    }
+    if (state.status !== 'playing' || state.turn !== 2) {
+      setThinking(false);
+      return;
+    }
+
+    const used = Math.ceil(session.past.length / 2);
+    if (used >= puzzle.moveLimit) {
+      setThinking(false);
+      return;
+    }
+
+    let cancelled = false;
+    setThinking(true);
+
+    const timer = window.setTimeout(() => {
+      const remaining = Math.max(1, puzzle.moveLimit - used);
+      const result = findBestMove(state, remaining * 2);
+      if (!cancelled && result.col !== null) {
+        dispatch({ type: 'play', col: result.col });
+      }
+      if (!cancelled) setThinking(false);
+    }, 420);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    screen,
+    match.mode,
+    puzzle,
+    puzzleExhausted,
+    state,
+    session.past.length,
+  ]);
+
+  /* ---------- 玩家用完限定步数时，立即结束本次尝试 ---------- */
+  useEffect(() => {
+    if (screen !== 'game' || match.mode !== 'puzzle' || !puzzle) return;
+    if (state.status !== 'playing' || state.turn !== 2) return;
+    if (Math.ceil(session.past.length / 2) >= puzzle.moveLimit) {
+      setPuzzleExhausted(true);
+      setThinking(false);
+    }
+  }, [screen, match.mode, puzzle, state.status, state.turn, session.past.length]);
+
   /* ---------- 提示在落子后自动消失 ---------- */
   useEffect(() => {
     setHint(null);
@@ -142,45 +240,81 @@ export default function App() {
 
   /* ---------- 操作 ---------- */
   const startMatch = useCallback((next: MatchConfig) => {
-    const nextGame = makeConfig(next.size, next.mode === 'pve' ? 2 : next.players);
-    setMatch(next);
-    dispatch({ type: 'reset', config: nextGame });
-    setSeries(emptySeries(nextGame.players));
+    const nextPuzzle =
+      next.mode === 'puzzle' ? getPuzzle(next.puzzleId) ?? PUZZLES[0] : null;
+    const nextPlayers = next.mode === 'pvp' ? next.players : 2;
+    const nextSize = nextPuzzle ? nextPuzzle.size : next.size;
+    const nextGame = makeConfig(nextSize, nextPlayers);
+
+    setMatch({
+      ...next,
+      players: nextPlayers,
+      size: nextSize,
+      puzzleId: nextPuzzle?.id ?? null,
+    });
+    setSeries(emptySeries(nextPlayers));
+
+    if (nextPuzzle) {
+      const loaded = createPuzzleState(nextPuzzle);
+      dispatch({ type: 'load', state: loaded });
+      prevCountRef.current = loaded.count;
+    } else {
+      dispatch({ type: 'reset', config: nextGame });
+      prevCountRef.current = 0;
+    }
+
     recordedRef.current = false;
-    prevCountRef.current = 0;
     setHint(null);
     setThinking(false);
     setResultVisible(false);
+    setPuzzleSolved(false);
+    setPuzzleHints(0);
+    setPuzzleExhausted(false);
+    setPuzzleNotice(null);
     setScreen('game');
   }, []);
 
   const play = useCallback(
     (col: number) => {
-      if (thinking) return;
+      if (thinking || puzzleExhausted) return;
       if (state.status !== 'playing') return;
       if (aiPlayer !== null && state.turn === aiPlayer) return;
+      if (match.mode === 'puzzle' && state.turn !== 1) return;
+      setPuzzleNotice(null);
       dispatch({ type: 'play', col });
     },
-    [thinking, state.status, state.turn, aiPlayer],
+    [thinking, state.status, state.turn, aiPlayer, match.mode, puzzleExhausted],
   );
 
   const undo = useCallback(() => {
-    if (thinking) return;
+    if (thinking || puzzleExhausted) return;
     if (state.status !== 'playing') return;
-    const steps = match.mode === 'pve' ? 2 : 1;
+    const steps = match.mode === 'pve' || match.mode === 'puzzle' ? 2 : 1;
+    setPuzzleNotice(null);
     dispatch({ type: 'undo', steps });
-  }, [thinking, state.status, match.mode]);
+  }, [thinking, state.status, match.mode, puzzleExhausted]);
 
   const restart = useCallback(() => {
-    dispatch({ type: 'reset' });
+    if (puzzle) {
+      const loaded = createPuzzleState(puzzle);
+      dispatch({ type: 'load', state: loaded });
+      prevCountRef.current = loaded.count;
+    } else {
+      dispatch({ type: 'reset' });
+      prevCountRef.current = 0;
+    }
     recordedRef.current = false;
-    prevCountRef.current = 0;
     setHint(null);
     setThinking(false);
     setResultVisible(false);
-  }, []);
+    setPuzzleSolved(false);
+    setPuzzleHints(0);
+    setPuzzleExhausted(false);
+    setPuzzleNotice(null);
+  }, [puzzle]);
 
   const swap = useCallback(() => {
+    if (match.mode !== 'pve') return;
     setMatch((prev) => ({ ...prev, humanFirst: !prev.humanFirst }));
     dispatch({ type: 'reset' });
     recordedRef.current = false;
@@ -188,12 +322,32 @@ export default function App() {
     setHint(null);
     setThinking(false);
     setResultVisible(false);
-  }, []);
+  }, [match.mode]);
 
   const askHint = useCallback(async () => {
-    if (state.status !== 'playing' || thinking || hintLoading) return;
-    if (state.config.players !== 2) return;
+    if (state.status !== 'playing' || thinking || hintLoading || puzzleExhausted) return;
     if (aiPlayer !== null && state.turn === aiPlayer) return;
+
+    if (match.mode === 'puzzle') {
+      if (!puzzle || state.turn !== puzzle.human || remainingMoves <= 0) return;
+      setPuzzleNotice(null);
+      setHintLoading(true);
+      try {
+        const result = findBestMove(state, remainingMoves * 2 - 1);
+        if (result.col !== null && result.score > 0) {
+          setHint(result.col);
+          setPuzzleHints((count) => count + 1);
+        } else {
+          setHint(null);
+          setPuzzleNotice('当前局面已无法在限定步数内取胜，重开或按 R。');
+        }
+      } finally {
+        setHintLoading(false);
+      }
+      return;
+    }
+
+    if (state.config.players !== 2) return;
     setHintLoading(true);
     try {
       const result = await requestMove(
@@ -209,7 +363,18 @@ export default function App() {
     } finally {
       setHintLoading(false);
     }
-  }, [state, thinking, hintLoading, aiPlayer, requestMove, game]);
+  }, [
+    state,
+    thinking,
+    hintLoading,
+    aiPlayer,
+    match.mode,
+    puzzle,
+    remainingMoves,
+    requestMove,
+    game,
+    puzzleExhausted,
+  ]);
 
   /* ---------- 键盘 ---------- */
   useEffect(() => {
@@ -241,18 +406,28 @@ export default function App() {
         <Menu
           initial={match}
           stats={stats}
+          puzzleProgress={puzzleProgress}
           skinId={skinId}
           onSkinChange={setSkinId}
           onStart={startMatch}
           onResetStats={resetStats}
+          onResetPuzzles={resetPuzzles}
         />
       </div>
     );
   }
 
   const turnLabel = (() => {
+    if (puzzleExhausted) return '步数用尽';
     if (state.status === 'draw') return '和棋';
-    if (state.status === 'won') return '对局结束';
+    if (state.status === 'won') {
+      if (puzzle) return state.winner === puzzle.human ? '解开了' : '防守成功';
+      return '对局结束';
+    }
+    if (match.mode === 'puzzle') {
+      if (thinking) return 'AI 防守中…';
+      return state.turn === 1 ? '你的回合' : 'AI 回合';
+    }
     if (match.mode === 'pve') {
       if (thinking) return 'AI 思考中…';
       return state.turn === aiPlayer ? 'AI 回合' : '你的回合';
@@ -261,10 +436,37 @@ export default function App() {
     return `玩家 ${state.turn} 回合`;
   })();
 
-  const modeLabel =
-    match.mode === 'pve'
+  const modeLabel = puzzle
+    ? `残局 · NO.${String(puzzle.no).padStart(2, '0')} · ${game.cols}×${game.rows}`
+    : match.mode === 'pve'
       ? `人机 · ${DIFFICULTY_LABELS[match.difficulty]} · ${game.cols}×${game.rows}`
       : `本地 · ${game.players} 人 · ${game.cols}×${game.rows}`;
+
+  const canHint =
+    match.mode === 'puzzle'
+      ? Boolean(puzzle) &&
+        state.status === 'playing' &&
+        state.turn === 1 &&
+        !thinking &&
+        !hintLoading &&
+        !puzzleExhausted &&
+        remainingMoves > 0
+      : game.players === 2 &&
+        state.status === 'playing' &&
+        !thinking &&
+        !hintLoading &&
+        !isAiTurn;
+
+  const startNextPuzzle = () => {
+    if (!nextPuzzle) return;
+    startMatch({
+      ...match,
+      mode: 'puzzle',
+      puzzleId: nextPuzzle.id,
+      size: nextPuzzle.size,
+      players: 2,
+    });
+  };
 
   return (
     <div className="app">
@@ -292,37 +494,73 @@ export default function App() {
               <span>{turnLabel}</span>
             </div>
 
-            <div className="score-inline" title="本场胜局">
-              {series.wins.map((wins, i) => (
-                <span className="score-item" key={i}>
-                  <i className={`chip chip-p${i + 1}`} />
-                  {wins}
+            {puzzle ? (
+              <div className="score-inline puzzle-limits" title="限定步数">
+                <span>限 {puzzle.moveLimit} 步</span>
+                <span className="score-draws">
+                  已用 {usedMoves} / {puzzle.moveLimit}
                 </span>
-              ))}
-              {series.draws > 0 && (
-                <span className="score-draws">和 {series.draws}</span>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="score-inline" title="本场胜局">
+                {series.wins.map((wins, i) => (
+                  <span className="score-item" key={i}>
+                    <i className={`chip chip-p${i + 1}`} />
+                    {wins}
+                  </span>
+                ))}
+                {series.draws > 0 && (
+                  <span className="score-draws">和 {series.draws}</span>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
         <div className="board-wrap">
           <Board
             state={state}
-            disabled={thinking || isAiTurn}
+            disabled={thinking || isAiTurn || puzzleExhausted}
             hint={game.players === 2 ? hint : null}
             onPlay={play}
+            title={puzzle ? `残局 · ${puzzle.title}` : undefined}
+            meta={
+              puzzle
+                ? `${puzzle.size} × ${puzzle.size} · 限 ${puzzle.moveLimit} 步`
+                : undefined
+            }
+            footer={
+              puzzle ? `PUZZLE · 你执先手 · ${puzzle.moveLimit} 步内取胜` : undefined
+            }
           />
-          <ResultPanel
-            state={state}
-            mode={match.mode}
-            humanFirst={match.humanFirst}
-            visible={resultVisible}
-            onAgain={restart}
-            onSwap={swap}
-            onMenu={() => setScreen('menu')}
-          />
+          {puzzle ? (
+            <PuzzlePanel
+              puzzle={puzzle}
+              state={state}
+              solved={puzzleSolved}
+              moves={usedMoves}
+              hints={puzzleHints}
+              nextPuzzle={nextPuzzle}
+              visible={resultVisible}
+              exhausted={puzzleExhausted}
+              onAgain={restart}
+              onNext={startNextPuzzle}
+              onMenu={() => setScreen('menu')}
+            />
+          ) : (
+            <ResultPanel
+              state={state}
+              mode={match.mode === 'pvp' ? 'pvp' : 'pve'}
+              humanFirst={match.humanFirst}
+              visible={resultVisible}
+              onAgain={restart}
+              onSwap={swap}
+              onMenu={() => setScreen('menu')}
+            />
+          )}
         </div>
+
+        {puzzleNotice && <p className="puzzle-notice">{puzzleNotice}</p>}
 
         <Controls
           onUndo={undo}
@@ -330,14 +568,13 @@ export default function App() {
           onHint={askHint}
           onToggleSound={() => setSoundOn((v) => !v)}
           soundOn={soundOn}
-          canUndo={state.status === 'playing' && session.past.length > 0 && !thinking}
-          canHint={
-            game.players === 2 &&
+          canUndo={
             state.status === 'playing' &&
-            !thinking &&
-            !hintLoading &&
-            !isAiTurn
+            !puzzleExhausted &&
+            session.past.length > 0 &&
+            !thinking
           }
+          canHint={canHint}
           hintLoading={hintLoading}
           showHint={game.players === 2}
         />

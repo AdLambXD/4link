@@ -267,7 +267,9 @@ export function createSession(
 export type SessionAction =
   | { type: 'play'; col: number }
   | { type: 'undo'; steps: number }
-  | { type: 'reset'; turn?: Player; config?: GameConfig };
+  | { type: 'reset'; turn?: Player; config?: GameConfig }
+  /** 载入一个预设局面（残局谜题），清空悔棋历史。 */
+  | { type: 'load'; state: GameState };
 
 export function sessionReducer(state: Session, action: SessionAction): Session {
   switch (action.type) {
@@ -287,5 +289,7 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
         action.turn ?? 1,
         action.config ?? state.current.config,
       );
+    case 'load':
+      return { current: action.state, past: [] };
   }
 }

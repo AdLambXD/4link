@@ -6,6 +6,12 @@ interface BoardProps {
   disabled: boolean;
   hint: number | null;
   onPlay: (col: number) => void;
+  /** 棋盘上方的标题；默认为「四连引力」。 */
+  title?: string;
+  /** 标题右侧的规格文字；默认显示尺寸与连子数。 */
+  meta?: string;
+  /** 棋盘下方的页脚文字。 */
+  footer?: string;
 }
 
 /** 星位：按棋盘大小取靠边的四个点，偶数盘不强行放中心。 */
@@ -14,7 +20,15 @@ function starPoints(size: number): number[] {
   return [...new Set([q, size - 1 - q])].sort((a, b) => a - b);
 }
 
-export function Board({ state, disabled, hint, onPlay }: BoardProps) {
+export function Board({
+  state,
+  disabled,
+  hint,
+  onPlay,
+  title = '四连引力',
+  meta,
+  footer,
+}: BoardProps) {
   const [hover, setHover] = useState<number | null>(null);
 
   const { cols, rows, win, players } = state.config;
@@ -33,10 +47,8 @@ export function Board({ state, disabled, hint, onPlay }: BoardProps) {
   return (
     <div className="board-frame">
       <div className="board-meta">
-        <span className="board-title">四连引力</span>
-        <span>
-          {cols} × {rows} · {win} 连
-        </span>
+        <span className="board-title">{title}</span>
+        <span>{meta ?? `${cols} × ${rows} · ${win} 连`}</span>
       </div>
 
       <div className="board-grid">
@@ -171,9 +183,7 @@ export function Board({ state, disabled, hint, onPlay }: BoardProps) {
       </div>
 
       <div className="board-foot">
-        <span>
-          DROP · STACK · LINK{players > 2 ? ` · ${players}P` : ''}
-        </span>
+        <span>{footer ?? `DROP · STACK · LINK${players > 2 ? ` · ${players}P` : ''}`}</span>
         <span className="board-diamond" />
       </div>
     </div>

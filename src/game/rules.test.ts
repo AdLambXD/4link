@@ -6,11 +6,13 @@ import {
   ROWS,
   SIZE_WIN,
   createGame,
+  createSession,
   drop,
   legalMoves,
   lineAt,
   makeConfig,
   normalizeConfig,
+  sessionReducer,
   type GameState,
 } from './rules';
 
@@ -194,6 +196,17 @@ describe('胜负判定', () => {
   it('分出胜负后 turn 停留在获胜方', () => {
     const g = play([0, 5, 1, 5, 2, 5, 3]);
     expect(g.turn).toBe(1);
+  });
+});
+
+describe('sessionReducer', () => {
+  it('load 会载入预设局面并清空悔棋历史', () => {
+    const loaded = drop(createGame(1, makeConfig(6, 2)), 2);
+    const session = createSession(1, makeConfig(6, 2));
+    const next = sessionReducer(session, { type: 'load', state: loaded });
+    expect(next.current).toBe(loaded);
+    expect(next.past).toEqual([]);
+    expect(next.current.board[2]).toBe(1);
   });
 });
 

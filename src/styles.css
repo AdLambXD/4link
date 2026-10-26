@@ -1155,6 +1155,182 @@ button {
   padding: 9px 0;
 }
 
+/* ---------- 残局谜题 ---------- */
+
+.puzzle-head-meta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.puzzle-count {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.puzzle-reset {
+  margin-left: 0;
+}
+
+.puzzle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.puzzle-card {
+  appearance: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 9px 10px 10px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--paper-hi);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 rgba(32, 28, 23, 0.07);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.08s ease,
+    box-shadow 0.08s ease;
+}
+
+.puzzle-card:hover:not(.is-on) {
+  background: #fdf8ec;
+}
+
+.puzzle-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.puzzle-card:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.puzzle-card.is-on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-hi);
+  box-shadow: 2px 2px 0 rgba(32, 28, 23, 0.2);
+}
+
+.puzzle-card.is-solved:not(.is-on) {
+  border-color: var(--ink-soft);
+}
+
+.puzzle-card-top {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.puzzle-no {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.puzzle-check {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 1px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.puzzle-card.is-solved .puzzle-check {
+  border-color: var(--accent);
+}
+
+.puzzle-card.is-on .puzzle-check {
+  border-color: rgba(247, 242, 228, 0.45);
+  color: var(--paper-hi);
+}
+
+.puzzle-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.puzzle-meta {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.puzzle-best {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.puzzle-card.is-on .puzzle-no,
+.puzzle-card.is-on .puzzle-meta {
+  color: rgba(247, 242, 228, 0.62);
+}
+
+.puzzle-card.is-on .puzzle-best {
+  color: #f0b39f;
+}
+
+.puzzle-brief {
+  margin-top: 9px;
+  padding-left: 9px;
+  border-left: 2px solid var(--accent);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.puzzle-limits {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.puzzle-notice {
+  margin-top: -4px;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.slip-body .slip-note {
+  max-width: 240px;
+  font-size: 10.5px;
+  line-height: 1.55;
+  text-align: center;
+}
+
 /* ---------- 窄屏 ---------- */
 
 @media (max-width: 430px) {

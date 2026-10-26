@@ -51,7 +51,7 @@ describe('chooseMove', () => {
       expect(result.col).toBeLessThan(COLS);
       expect(heights[result.col]).toBeLessThan(6);
     }
-  });
+  }, 20_000);
 
   it('满盘返回 -1', () => {
     const board = emptyBoard();

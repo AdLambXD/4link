@@ -1,25 +1,30 @@
 import { useState } from 'react';
 import { DIFFICULTY_LABELS, type Difficulty } from '../ai/engine';
+import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
+import type { PuzzleProgress, PuzzleRecord } from '../hooks/usePuzzleProgress';
 import type { Stats } from '../hooks/useStats';
 import { SKINS, getSkin, type SkinId } from '../skins';
 import { ArrowRightIcon } from './Icons';
 
 export interface MatchConfig {
-  mode: 'pvp' | 'pve';
+  mode: 'pvp' | 'pve' | 'puzzle';
   difficulty: Difficulty;
   humanFirst: boolean;
   players: number;
   size: BoardSize;
+  puzzleId: string | null;
 }
 
 interface MenuProps {
   initial: MatchConfig;
   stats: Stats;
+  puzzleProgress: PuzzleProgress;
   skinId: SkinId;
   onSkinChange: (id: SkinId) => void;
   onStart: (config: MatchConfig) => void;
   onResetStats: () => void;
+  onResetPuzzles: () => void;
 }
 
 const PLAYER_COUNTS = Array.from(
@@ -32,19 +37,43 @@ const PLAYER_NOTES = ['DUO', 'TRIO', 'SQUAD', 'FIVE', 'SIX'];
 export function Menu({
   initial,
   stats,
+  puzzleProgress,
   skinId,
   onSkinChange,
   onStart,
   onResetStats,
+  onResetPuzzles,
 }: MenuProps) {
-  const [mode, setMode] = useState<'pvp' | 'pve'>(initial.mode);
+  const firstUnsolved = PUZZLES.find((puzzle) => !puzzleProgress[puzzle.id]?.solved) ?? PUZZLES[0];
+  const [mode, setMode] = useState<MatchConfig['mode']>(initial.mode);
   const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty);
   const [humanFirst, setHumanFirst] = useState(initial.humanFirst);
   const [players, setPlayers] = useState(initial.players);
   const [size, setSize] = useState<BoardSize>(initial.size);
+  const [puzzleId, setPuzzleId] = useState(() => getPuzzle(initial.puzzleId)?.id ?? firstUnsolved.id);
+
+  const selectedPuzzle = getPuzzle(puzzleId) ?? firstUnsolved;
+  const solvedCount = PUZZLES.filter((puzzle) => puzzleProgress[puzzle.id]?.solved).length;
+  const solvedRecords = PUZZLES.map((puzzle) => puzzleProgress[puzzle.id]).filter(
+    (record): record is PuzzleRecord => Boolean(record?.solved),
+  );
+  const bestSolved = solvedRecords.length
+    ? Math.min(...solvedRecords.map((record) => record.best))
+    : null;
 
   let step = 0;
   const num = () => String(++step).padStart(2, '0');
+
+  const start = () => {
+    onStart({
+      mode,
+      difficulty,
+      humanFirst,
+      players: mode === 'pvp' ? players : 2,
+      size: mode === 'puzzle' ? selectedPuzzle.size : size,
+      puzzleId: mode === 'puzzle' ? selectedPuzzle.id : null,
+    });
+  };
 
   return (
     <main className="poster">
@@ -54,7 +83,7 @@ export function Menu({
             <span className="wordmark-4">4</span>
             <span>LINK</span>
           </h1>
-          <span className="issue">NO. 04</span>
+          <span className="issue">NO. 05</span>
         </div>
         <p className="kicker">Four in a row · 四连引力 · 重力棋盘</p>
         <div className="rule" />
@@ -65,7 +94,7 @@ export function Menu({
           <span className="block-num">{num()}</span>
           <h2>对战模式</h2>
         </div>
-        <div className="choices choices-2">
+        <div className="choices choices-3">
           <button
             className={`choice${mode === 'pve' ? ' is-on' : ''}`}
             onClick={() => setMode('pve')}
@@ -80,8 +109,65 @@ export function Menu({
             <span className="choice-main">本地多人</span>
             <span className="choice-note">LOCAL</span>
           </button>
+          <button
+            className={`choice${mode === 'puzzle' ? ' is-on' : ''}`}
+            onClick={() => setMode('puzzle')}
+          >
+            <span className="choice-main">残局谜题</span>
+            <span className="choice-note">PUZZLE</span>
+          </button>
         </div>
       </section>
+
+      {mode === 'puzzle' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>选择残局</h2>
+            <span className="puzzle-head-meta">
+              <span className="puzzle-count">
+                已解 {solvedCount} / {PUZZLES.length}
+              </span>
+              {solvedCount > 0 && (
+                <button className="text-btn puzzle-reset" onClick={onResetPuzzles}>
+                  重置
+                </button>
+              )}
+            </span>
+          </div>
+          <div className="puzzle-grid">
+            {PUZZLES.map((puzzle) => {
+              const record = puzzleProgress[puzzle.id];
+              const isOn = puzzle.id === selectedPuzzle.id;
+              return (
+                <button
+                  key={puzzle.id}
+                  className={`puzzle-card${isOn ? ' is-on' : ''}${
+                    record?.solved ? ' is-solved' : ''
+                  }`}
+                  onClick={() => setPuzzleId(puzzle.id)}
+                  aria-pressed={isOn}
+                >
+                  <span className="puzzle-card-top">
+                    <span className="puzzle-no">NO.{String(puzzle.no).padStart(2, '0')}</span>
+                    <span className="puzzle-check" aria-label={record?.solved ? '已解开' : '未解开'}>
+                      {record?.solved ? '✓' : ''}
+                    </span>
+                  </span>
+                  <span className="puzzle-title">{puzzle.title}</span>
+                  <span className="puzzle-meta">
+                    {puzzle.size}×{puzzle.size} · {puzzle.moveLimit} 步杀
+                  </span>
+                  {record?.solved && (
+                    <span className="puzzle-best">最佳 {record.best} 步</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="puzzle-brief">{selectedPuzzle.note}</p>
+        </section>
+      )}
 
       {mode === 'pvp' && (
         <section className="block">
@@ -104,26 +190,28 @@ export function Menu({
         </section>
       )}
 
-      <section className="block">
-        <div className="block-head">
-          <span className="block-num">{num()}</span>
-          <h2>棋盘尺寸</h2>
-        </div>
-        <div className="choices choices-4">
-          {BOARD_SIZES.map((boardSize) => (
-            <button
-              key={boardSize}
-              className={`choice choice-compact${size === boardSize ? ' is-on' : ''}`}
-              onClick={() => setSize(boardSize)}
-            >
-              <span className="choice-main">
-                {boardSize} × {boardSize}
-              </span>
-              <span className="choice-note">{SIZE_WIN[boardSize]} 连</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      {mode !== 'puzzle' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>棋盘尺寸</h2>
+          </div>
+          <div className="choices choices-4">
+            {BOARD_SIZES.map((boardSize) => (
+              <button
+                key={boardSize}
+                className={`choice choice-compact${size === boardSize ? ' is-on' : ''}`}
+                onClick={() => setSize(boardSize)}
+              >
+                <span className="choice-main">
+                  {boardSize} × {boardSize}
+                </span>
+                <span className="choice-note">{SIZE_WIN[boardSize]} 连</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {mode === 'pve' && (
         <>
@@ -201,45 +289,58 @@ export function Menu({
         </div>
       </section>
 
-      <button
-        className="start-btn"
-        onClick={() =>
-          onStart({
-            mode,
-            difficulty,
-            humanFirst,
-            players: mode === 'pve' ? 2 : players,
-            size,
-          })
-        }
-      >
-        <span>开始对局</span>
+      <button className="start-btn" onClick={start}>
+        <span>{mode === 'puzzle' ? '开始解谜' : '开始对局'}</span>
         <ArrowRightIcon />
       </button>
 
-      <div className="scorecard">
-        <span className="scorecard-title">双人战绩</span>
-        <span className="score-item">
-          <i className="chip chip-p1" />
-          {stats.p1}
-        </span>
-        <span className="score-item">
-          <i className="chip chip-p2" />
-          {stats.p2}
-        </span>
-        <span className="score-item score-draw">和 {stats.draws}</span>
-        <button className="text-btn" onClick={onResetStats}>
-          清零
-        </button>
-      </div>
+      {mode === 'puzzle' ? (
+        <div className="scorecard">
+          <span className="scorecard-title">残局进度</span>
+          <span className="score-item">
+            <span className="puzzle-check">✓</span>
+            {solvedCount} / {PUZZLES.length}
+          </span>
+          <span className="score-draw">
+            {bestSolved === null ? '最佳 —' : `最佳 ${bestSolved} 步`}
+          </span>
+        </div>
+      ) : (
+        <div className="scorecard">
+          <span className="scorecard-title">双人战绩</span>
+          <span className="score-item">
+            <i className="chip chip-p1" />
+            {stats.p1}
+          </span>
+          <span className="score-item">
+            <i className="chip chip-p2" />
+            {stats.p2}
+          </span>
+          <span className="score-item score-draw">和 {stats.draws}</span>
+          <button className="text-btn" onClick={onResetStats}>
+            清零
+          </button>
+        </div>
+      )}
 
       <details className="notes">
         <summary>怎么玩</summary>
         <ul>
-          <li>方形围棋盘，轮流选一列，棋子落到该列最底部的交叉点。</li>
-          <li>2–6 人本地轮流；3 人以上不提供 AI 和提示。</li>
-          <li>6×6、8×8 连 4 个获胜；12×12、16×16 连 5 个获胜。</li>
-          <li>先抢中间列；斜线和双威胁最容易漏防。</li>
+          {mode === 'puzzle' ? (
+            <>
+              <li>每个残局都是一个未完成的盘面，你在限定步数内连成目标数即胜。</li>
+              <li>你固定执先手，AI 执后手；AI 会按最优防守尽量拖长战线。</li>
+              <li>步数只计算你的落子；提示会指出当前可强制取胜的一手。</li>
+              <li>解开的进度和最佳步数保存在本机。</li>
+            </>
+          ) : (
+            <>
+              <li>方形围棋盘，轮流选一列，棋子落到该列最底部的交叉点。</li>
+              <li>2–6 人本地轮流；3 人以上不提供 AI 和提示。</li>
+              <li>6×6、8×8 连 4 个获胜；12×12、16×16 连 5 个获胜。</li>
+              <li>先抢中间列；斜线和双威胁最容易漏防。</li>
+            </>
+          )}
         </ul>
       </details>
 
