@@ -51,9 +51,11 @@ chmod +x start-linux.sh
 1. 打开仓库的 **Settings → Pages**。
 2. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
 3. 推送代码到 `main`，或在 **Actions → Deploy to GitHub Pages** 手动运行。
-4. 部署完成后访问 `https://<用户名>.github.io/<仓库名>/`，本项目为 `https://adlambxd.github.io/4link/`。
+4. 部署完成后访问 `https://<用户名>.github.io/<仓库名>/`。
 
-构建时的资源前缀会自动从仓库名推导，因此仓库改名或 fork 后无需改代码。若使用自定义域名，请在 **Settings → Secrets and variables → Actions → Variables** 添加 `BASE_PATH`，值为 `/`。
+默认地址是 `https://<用户名>.github.io/<仓库名>/`。如果账号的用户站（`<用户名>.github.io`）配置了自定义域名，项目站会继承为 `https://<自定义域名>/<仓库名>/`。
+
+构建时的资源前缀会自动从仓库名推导，因此仓库改名或 fork 后无需改代码。只有**给当前仓库单独设置自定义域名**（站点位于域名根路径 `/`）时，才需要在 **Settings → Secrets and variables → Actions → Variables** 添加 `BASE_PATH=/`；继承用户站域名时保持留空。
 
 ## 玩法
 
