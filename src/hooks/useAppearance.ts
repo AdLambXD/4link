@@ -1,5 +1,14 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import {
+  DEFAULT_BOARD,
+  clampBoardVeil,
+  isBoardImageDataUrl,
+  isBoardStyle,
+  sanitizeBoardCustomization,
+  type BoardCustomization,
+  type BoardStyle,
+} from '../board';
+import {
   EMPTY_PIECES,
   isHexColor,
   isPieceImageDataUrl,
@@ -17,6 +26,7 @@ import {
 
 const SKIN_STORAGE_KEY = '4link.skin.v1';
 const PIECES_STORAGE_KEY = '4link.pieces.v1';
+const BOARD_STORAGE_KEY = '4link.board.v1';
 
 function loadSkin(): SkinId {
   try {
@@ -36,15 +46,25 @@ function loadPieces(): PieceCustomization {
   }
 }
 
+function loadBoard(): BoardCustomization {
+  try {
+    const raw = localStorage.getItem(BOARD_STORAGE_KEY);
+    return raw ? sanitizeBoardCustomization(JSON.parse(raw)) : DEFAULT_BOARD;
+  } catch {
+    return DEFAULT_BOARD;
+  }
+}
+
 /**
- * 整站外观：主题变量 + 玩家棋子覆盖。
+ * 整站外观：主题变量 + 玩家棋子覆盖 + 棋盘覆盖。
  *
- * 主题先写入 :root，自定义颜色/图片再覆盖对应玩家变量；
- * 因此换主题时，未自定义的棋子会自动跟随新主题。
+ * 主题先写入 :root，自定义颜色/图片再覆盖对应变量；
+ * 因此换主题时，未自定义的棋子与棋盘会自动跟随新主题。
  */
 export function useAppearance() {
   const [skinId, setSkinId] = useState<SkinId>(loadSkin);
   const [pieces, setPieces] = useState<PieceCustomization>(loadPieces);
+  const [board, setBoard] = useState<BoardCustomization>(loadBoard);
   const skin = getSkin(skinId);
 
   useLayoutEffect(() => {
@@ -73,13 +93,26 @@ export function useAppearance() {
       );
     }
 
+    // 棋盘覆盖写在主题变量之后，才能盖住 --board-face。
+    root.dataset.boardStyle = board.style;
+    root.style.setProperty('--board-face', board.face ?? skin.vars['--board-face']);
+    root.style.setProperty(
+      '--board-bg-image',
+      board.image ? `url("${board.image}")` : 'none',
+    );
+    root.style.setProperty(
+      '--board-bg-veil',
+      String(board.image ? board.veil : 0),
+    );
+
     try {
       localStorage.setItem(SKIN_STORAGE_KEY, skin.id);
       localStorage.setItem(PIECES_STORAGE_KEY, JSON.stringify(pieces));
+      localStorage.setItem(BOARD_STORAGE_KEY, JSON.stringify(board));
     } catch {
       // 隐私模式或存储配额不足时，外观仍在本局生效。
     }
-  }, [skin, pieces]);
+  }, [skin, pieces, board]);
 
   const chooseSkin = useCallback((id: SkinId) => setSkinId(id), []);
 
@@ -117,13 +150,46 @@ export function useAppearance() {
     setPieces({ colors: {}, images: {} });
   }, []);
 
+  const setBoardStyle = useCallback((style: BoardStyle) => {
+    if (!isBoardStyle(style)) return;
+    setBoard((prev) => ({ ...prev, style }));
+  }, []);
+
+  const setBoardFace = useCallback((face: string | null) => {
+    setBoard((prev) => {
+      if (face === null) return { ...prev, face: null };
+      if (!isHexColor(face)) return prev;
+      return { ...prev, face };
+    });
+  }, []);
+
+  const setBoardImage = useCallback((image: string | null) => {
+    setBoard((prev) => {
+      if (image === null) return { ...prev, image: null };
+      if (!isBoardImageDataUrl(image)) return prev;
+      return { ...prev, image };
+    });
+  }, []);
+
+  const setBoardVeil = useCallback((veil: number) => {
+    setBoard((prev) => ({ ...prev, veil: clampBoardVeil(veil) }));
+  }, []);
+
+  const resetBoard = useCallback(() => setBoard(DEFAULT_BOARD), []);
+
   return {
     skinId,
     skin,
     pieces,
+    board,
     setSkinId: chooseSkin,
     setPieceColor,
     setPieceImage,
     resetPieces,
+    setBoardStyle,
+    setBoardFace,
+    setBoardImage,
+    setBoardVeil,
+    resetBoard,
   };
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DIFFICULTY_LABELS, type Difficulty } from '../ai/engine';
+import type { BoardCustomization } from '../board';
 import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { TUTORIALS, getTutorial } from '../game/tutorial';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
@@ -32,6 +33,7 @@ interface MenuProps {
   tutorialProgress: TutorialProgress;
   skin: Skin;
   pieces: PieceCustomization;
+  board: BoardCustomization;
   onOpenSettings: () => void;
   onStart: (config: MatchConfig) => void;
   onResetStats: () => void;
@@ -53,6 +55,7 @@ export function Menu({
   tutorialProgress,
   skin,
   pieces,
+  board,
   onOpenSettings,
   onStart,
   onResetStats,
@@ -83,6 +86,13 @@ export function Menu({
     ? Math.min(...solvedRecords.map((record) => record.best))
     : null;
   const customPieces = hasPieceCustomization(pieces);
+  const boardNote = board.image
+    ? '自定义背景'
+    : board.face
+      ? '自定义底色'
+      : board.style === 'handdrawn'
+        ? '手绘格线'
+        : null;
 
   let step = 0;
   const num = () => String(++step).padStart(2, '0');
@@ -373,10 +383,13 @@ export function Menu({
             aria-hidden="true"
           >
             <span
-              className="appearance-board"
+              className={`appearance-board${board.style === 'handdrawn' ? ' is-hand' : ''}`}
               style={{
-                backgroundColor: skin.vars['--board-face'],
+                backgroundColor: board.face ?? skin.vars['--board-face'],
                 borderColor: skin.vars['--board-edge'],
+                backgroundImage: board.image
+                  ? `url("${board.image}")`
+                  : undefined,
               }}
             >
               {PLAYER_NUMBERS.slice(0, 3).map((player) => {
@@ -401,7 +414,11 @@ export function Menu({
             <span className="choice-main">{skin.name}主题</span>
             <span className="choice-note">{skin.note} · 整站风格</span>
             <span className="appearance-meta">
-              {customPieces ? '棋子已自定义' : '主题、棋子颜色与图片'}
+              {boardNote || customPieces
+                ? [boardNote, customPieces ? '棋子已自定义' : null]
+                    .filter(Boolean)
+                    .join(' · ')
+                : '主题、棋盘、棋子颜色与图片'}
             </span>
           </span>
           <span className="appearance-open">

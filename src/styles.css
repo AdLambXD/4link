@@ -418,6 +418,13 @@ button {
   padding: 4px;
   border: 1px solid;
   border-radius: 1px;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.appearance-board.is-hand {
+  border-radius: 3px 2px 4px 2px;
 }
 
 .appearance-board i {
@@ -899,15 +906,30 @@ button {
   border: 1px solid var(--board-edge);
   border-radius: 2px;
   background-color: var(--board-face);
+  background-image: var(--board-bg-image, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   box-shadow:
     inset 0 0 22px rgba(0, 0, 0, 0.08),
     0 1px 0 rgba(255, 255, 255, 0.3);
   touch-action: manipulation;
 }
 
+/* 自定义背景图上盖一层主题底色，保证格线与棋子仍然清楚。 */
+.board-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--board-face);
+  opacity: var(--board-bg-veil, 0);
+  pointer-events: none;
+}
+
 .board-lines {
   position: absolute;
   inset: 0;
+  z-index: 1;
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -917,7 +939,7 @@ button {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
 }
 
@@ -1896,6 +1918,166 @@ button {
 
 .theme-option.is-on .theme-check {
   border-color: var(--accent);
+}
+
+/* ---------- 棋盘样式 ---------- */
+
+.board-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.board-style-option {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.08s ease,
+    transform 0.08s ease;
+}
+
+.board-style-option:hover {
+  background: var(--surface-hover);
+}
+
+.board-style-option.is-on {
+  border-color: var(--ink);
+  background: var(--paper-hi);
+  box-shadow: 2px 2px 0 var(--accent);
+}
+
+.board-style-option:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.board-style-option:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.board-style-preview {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 3px;
+  border: 1px solid var(--board-edge);
+  border-radius: 2px;
+  background: var(--board-face);
+}
+
+.board-style-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.board-style-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.board-style-name {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.board-style-note {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.board-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+}
+
+.board-swatch {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  background-color: var(--board-face);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.08);
+}
+
+.board-custom-copy {
+  min-width: 118px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.board-custom-title {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.board-custom-note {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.board-custom .piece-image-actions {
+  margin-left: auto;
+}
+
+.board-custom .text-btn {
+  font-size: 9px;
+}
+
+.board-veil-control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+}
+
+.board-veil-control input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.board-veil-control code {
+  width: 34px;
+  text-align: right;
+  color: var(--ink-soft);
+  font-size: 8.5px;
 }
 
 /* ---------- 棋子自定义 ---------- */

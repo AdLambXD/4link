@@ -84,10 +84,16 @@ export default function App() {
   const {
     skin,
     pieces,
+    board,
     setSkinId,
     setPieceColor,
     setPieceImage,
     resetPieces,
+    setBoardStyle,
+    setBoardFace,
+    setBoardImage,
+    setBoardVeil,
+    resetBoard,
   } = useAppearance();
   const { stats, record, reset: resetStats } = useStats();
   const {
@@ -542,10 +548,16 @@ export default function App() {
     <Settings
       skin={skin}
       pieces={pieces}
+      board={board}
       onSkinChange={setSkinId}
       onPieceColorChange={setPieceColor}
       onPieceImageChange={setPieceImage}
       onResetPieces={resetPieces}
+      onBoardStyleChange={setBoardStyle}
+      onBoardFaceChange={setBoardFace}
+      onBoardImageChange={setBoardImage}
+      onBoardVeilChange={setBoardVeil}
+      onResetBoard={resetBoard}
       onClose={closeSettings}
     />
   ) : null;
@@ -560,6 +572,7 @@ export default function App() {
           tutorialProgress={tutorialProgress}
           skin={skin}
           pieces={pieces}
+          board={board}
           onOpenSettings={openSettings}
           onStart={startMatch}
           onResetStats={resetStats}
@@ -748,6 +761,7 @@ export default function App() {
                   ? `PUZZLE · 你执先手 · ${puzzle.moveLimit} 步内取胜`
                   : undefined
             }
+            boardStyle={board.style}
           />
           {tutorial ? (
             <TutorialPanel

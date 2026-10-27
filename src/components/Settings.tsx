@@ -7,6 +7,12 @@ import {
 } from 'react';
 import { CloseIcon } from './Icons';
 import {
+  BOARD_STYLES,
+  hasBoardCustomization,
+  type BoardCustomization,
+  type BoardStyle,
+} from '../board';
+import {
   PLAYER_NUMBERS,
   hasPieceCustomization,
   pieceColor,
@@ -14,16 +20,22 @@ import {
   type PieceCustomization,
   type PlayerNumber,
 } from '../pieces';
-import { imageFileToDataUrl } from '../lib/pieceImage';
+import { boardImageFileToDataUrl, imageFileToDataUrl } from '../lib/pieceImage';
 import { SKINS, type Skin, type SkinId } from '../skins';
 
 interface SettingsProps {
   skin: Skin;
   pieces: PieceCustomization;
+  board: BoardCustomization;
   onSkinChange: (id: SkinId) => void;
   onPieceColorChange: (player: PlayerNumber, color: string | null) => void;
   onPieceImageChange: (player: PlayerNumber, image: string | null) => void;
   onResetPieces: () => void;
+  onBoardStyleChange: (style: BoardStyle) => void;
+  onBoardFaceChange: (face: string | null) => void;
+  onBoardImageChange: (image: string | null) => void;
+  onBoardVeilChange: (veil: number) => void;
+  onResetBoard: () => void;
   onClose: () => void;
 }
 
@@ -35,6 +47,41 @@ const PLAYER_ROLES: Record<PlayerNumber, string> = {
   5: '玩家 5',
   6: '玩家 6',
 };
+
+const BOARD_STYLE_META: Record<BoardStyle, { name: string; note: string }> = {
+  clean: { name: '规整', note: 'CLEAN' },
+  handdrawn: { name: '手绘', note: 'SKETCH' },
+};
+
+/** 设置面板里的格线小样；手绘版用略带弧度的路径。 */
+function BoardStylePreview({ style }: { style: BoardStyle }) {
+  return (
+    <span className="board-style-preview" aria-hidden="true">
+      <svg viewBox="0 0 40 40" fill="none">
+        {style === 'handdrawn' ? (
+          <g
+            stroke="var(--board-grid)"
+            strokeWidth="1.1"
+            strokeLinecap="round"
+          >
+            <path d="M7 6.6 Q20 7.4 33 6.8 L33.4 33 Q20 32.4 6.7 33.4 Z" />
+            <path d="M14 6.9 C14.3 15 13.7 25 14.2 33.1" />
+            <path d="M26 6.7 C25.7 15 26.4 24 25.9 33" />
+            <path d="M7.1 15 C15 14.6 25 15.2 33.2 14.8" />
+            <path d="M6.9 25 C15 25.4 25 24.7 33.1 25.2" />
+          </g>
+        ) : (
+          <g stroke="var(--board-grid)" strokeWidth="1">
+            <rect x="7" y="7" width="26" height="26" />
+            <path d="M14 7v26M26 7v26M7 14h26M7 26h26" />
+          </g>
+        )}
+        <circle cx="14" cy="14" r="1.4" fill="var(--board-dot)" />
+        <circle cx="26" cy="26" r="1.4" fill="var(--board-dot)" />
+      </svg>
+    </span>
+  );
+}
 
 function stoneStyle(
   color: string,
@@ -49,15 +96,22 @@ function stoneStyle(
 export function Settings({
   skin,
   pieces,
+  board,
   onSkinChange,
   onPieceColorChange,
   onPieceImageChange,
   onResetPieces,
+  onBoardStyleChange,
+  onBoardFaceChange,
+  onBoardImageChange,
+  onBoardVeilChange,
+  onResetBoard,
   onClose,
 }: SettingsProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [busyPlayer, setBusyPlayer] = useState<PlayerNumber | null>(null);
+  const [boardBusy, setBoardBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,7 +176,28 @@ export function Settings({
     }
   }
 
+  async function handleBoardUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setError(null);
+    setBoardBusy(true);
+    try {
+      const dataUrl = await boardImageFileToDataUrl(file);
+      onBoardImageChange(dataUrl);
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error ? uploadError.message : '图片处理失败，请重试',
+      );
+    } finally {
+      setBoardBusy(false);
+    }
+  }
+
   const custom = hasPieceCustomization(pieces);
+  const customBoard = hasBoardCustomization(board);
+  const boardFace = board.face ?? skin.vars['--board-face'];
 
   return (
     <div
@@ -142,7 +217,7 @@ export function Settings({
           <div>
             <span className="kicker">APPEARANCE</span>
             <h2 id="settings-title">设置</h2>
-            <p>整站主题与棋子外观，修改会立即应用。</p>
+            <p>整站主题、棋盘与棋子外观，修改会立即应用。</p>
           </div>
           <button
             ref={closeRef}
@@ -302,12 +377,6 @@ export function Settings({
             })}
           </div>
 
-          {error && (
-            <p className="settings-error" role="alert">
-              {error}
-            </p>
-          )}
-
           <div className="settings-piece-foot">
             <span>图片支持 PNG / JPG / WebP，最大 8 MB。</span>
             {custom && (
@@ -323,6 +392,159 @@ export function Settings({
               </button>
             )}
           </div>
+        </section>
+
+        <section className="settings-section" aria-labelledby="board-heading">
+          <div className="settings-section-head">
+            <span className="settings-num">03</span>
+            <h3 id="board-heading">棋盘</h3>
+            <span className="settings-section-note">格线 / 背景</span>
+          </div>
+
+          <p className="settings-hint">
+            手绘格线只改变画法，不改变交叉点与落子判定。
+          </p>
+
+          <div
+            className="board-style-grid"
+            role="group"
+            aria-label="棋盘格线样式"
+          >
+            {BOARD_STYLES.map((style) => {
+              const selected = style === board.style;
+              const meta = BOARD_STYLE_META[style];
+              return (
+                <button
+                  key={style}
+                  type="button"
+                  className={`board-style-option${selected ? ' is-on' : ''}`}
+                  onClick={() => onBoardStyleChange(style)}
+                  aria-pressed={selected}
+                >
+                  <BoardStylePreview style={style} />
+                  <span className="board-style-copy">
+                    <span className="board-style-name">{meta.name}</span>
+                    <span className="board-style-note">{meta.note}</span>
+                  </span>
+                  <span className="theme-check" aria-hidden="true">
+                    {selected ? '✓' : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="board-custom">
+            <span
+              className="board-swatch"
+              style={{
+                backgroundColor: boardFace,
+                backgroundImage: board.image
+                  ? `url("${board.image}")`
+                  : undefined,
+              }}
+              aria-hidden="true"
+            />
+            <span className="board-custom-copy">
+              <span className="board-custom-title">棋盘背景</span>
+              <span className="board-custom-note">
+                {board.image
+                  ? '自定义图片'
+                  : board.face
+                    ? '自定义底色'
+                    : '跟随主题底色'}
+              </span>
+            </span>
+
+            <label className="piece-color">
+              <span>底色</span>
+              <input
+                type="color"
+                value={boardFace}
+                onChange={(event) => onBoardFaceChange(event.target.value)}
+                aria-label="棋盘底色"
+              />
+              <code>{boardFace.toUpperCase()}</code>
+            </label>
+
+            {board.face ? (
+              <button
+                type="button"
+                className="text-btn piece-follow"
+                onClick={() => onBoardFaceChange(null)}
+              >
+                跟随主题
+              </button>
+            ) : (
+              <span className="piece-follow-note">主题色</span>
+            )}
+
+            <span className="piece-image-actions">
+              <label
+                className={`piece-upload${boardBusy ? ' is-disabled' : ''}`}
+              >
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => void handleBoardUpload(event)}
+                  disabled={boardBusy}
+                />
+                {boardBusy
+                  ? '处理中…'
+                  : board.image
+                    ? '更换背景'
+                    : '上传背景'}
+              </label>
+              {board.image && (
+                <button
+                  type="button"
+                  className="text-btn"
+                  onClick={() => onBoardImageChange(null)}
+                >
+                  移除
+                </button>
+              )}
+            </span>
+          </div>
+
+          {board.image && (
+            <label className="board-veil-control">
+              <span>背景蒙版</span>
+              <input
+                type="range"
+                min={0}
+                max={85}
+                step={5}
+                value={Math.round(board.veil * 100)}
+                onChange={(event) =>
+                  onBoardVeilChange(Number(event.target.value) / 100)
+                }
+              />
+              <code>{Math.round(board.veil * 100)}%</code>
+            </label>
+          )}
+
+          <div className="settings-piece-foot">
+            <span>背景支持 PNG / JPG / WebP，最大 12 MB，保存在本机。</span>
+            {customBoard && (
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => {
+                  setError(null);
+                  onResetBoard();
+                }}
+              >
+                恢复默认棋盘
+              </button>
+            )}
+          </div>
+
+          {error && (
+            <p className="settings-error" role="alert">
+              {error}
+            </p>
+          )}
         </section>
 
         <footer className="settings-foot">
