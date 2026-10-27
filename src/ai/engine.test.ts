@@ -35,6 +35,59 @@ describe('chooseMove', () => {
     expect(result.col).toBe(3);
   });
 
+  it('简单档有概率错过自己的一手胜', () => {
+    const board = emptyBoard();
+    board[0] = 1;
+    board[1] = 1;
+    board[2] = 1;
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const result = chooseMove(board, [1, 1, 1, 0, 0, 0], 1, 'easy');
+
+    expect(result.col).not.toBe(3);
+  });
+
+  it('简单档通常会拿下自己的一手胜', () => {
+    const board = emptyBoard();
+    board[0] = 1;
+    board[1] = 1;
+    board[2] = 1;
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const result = chooseMove(board, [1, 1, 1, 0, 0, 0], 1, 'easy');
+
+    expect(result.col).toBe(3);
+  });
+
+  it('简单档没有别的着法时仍然会赢', () => {
+    const board = emptyBoard();
+    board[30] = 1;
+    board[31] = 1;
+    board[32] = 1;
+    for (let r = 0; r < 6; r++) {
+      for (const c of [0, 1, 2, 4, 5]) {
+        if (board[r * COLS + c] === 0) board[r * COLS + c] = 2;
+      }
+    }
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const result = chooseMove(board, [6, 6, 6, 5, 6, 6], 1, 'easy');
+
+    expect(result.col).toBe(3);
+  });
+
+  it('普通档不会错过自己的一手胜', () => {
+    const board = emptyBoard();
+    board[0] = 1;
+    board[1] = 1;
+    board[2] = 1;
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const result = chooseMove(board, [1, 1, 1, 0, 0, 0], 1, 'normal');
+
+    expect(result.col).toBe(3);
+  });
+
   it('简单档有概率漏挡对手的一手胜', () => {
     const board = emptyBoard();
     board[0] = 2;

@@ -366,13 +366,13 @@ function givesOpponentWin(e: Engine, col: number, player: DuoPlayer): boolean {
 }
 
 function maxDepth(difficulty: Difficulty, size: number): number {
-  if (difficulty === 'easy') return size <= 6 ? 2 : 3;
+  if (difficulty === 'easy') return 1;
   if (difficulty === 'normal') return size <= 6 ? 6 : size <= 8 ? 6 : 4;
   return size <= 6 ? 14 : size <= 8 ? 9 : size <= 12 ? 6 : 5;
 }
 
 function timeBudget(difficulty: Difficulty, size: number): number {
-  if (difficulty === 'easy') return 120;
+  if (difficulty === 'easy') return 60;
   if (difficulty === 'normal') return size <= 8 ? 700 : 500;
   return size <= 6 ? 1400 : size <= 8 ? 1100 : size <= 12 ? 900 : 800;
 }
@@ -429,11 +429,25 @@ export function chooseMove(
     return { col, score: 0, depth: 0, nodes: 0, ms: performance.now() - started };
   }
 
-  // 能赢就赢
-  for (const c of legal) {
-    if (wouldWin(e, c, player)) {
-      return { col: c, score: WIN_SCORE, depth: 1, nodes: 0, ms: performance.now() - started };
+  // 能赢就赢；简单档有两成概率错过自己的一手胜
+  const winning = legal.filter((c) => wouldWin(e, c, player));
+  if (winning.length > 0) {
+    if (difficulty !== 'easy' || Math.random() >= 0.2) {
+      return {
+        col: winning[0],
+        score: WIN_SCORE,
+        depth: 1,
+        nodes: 0,
+        ms: performance.now() - started,
+      };
     }
+
+    // 故意错过：排除所有一手胜列，优先选不会立刻输的着法
+    const nonWinning = legal.filter((c) => !winning.includes(c));
+    const safe = nonWinning.filter((c) => !givesOpponentWin(e, c, player));
+    const pool = safe.length > 0 ? safe : nonWinning.length > 0 ? nonWinning : winning;
+    const col = pool[Math.floor(Math.random() * pool.length)];
+    return { col, score: 0, depth: 0, nodes: 0, ms: performance.now() - started };
   }
 
   // 对手下一手能赢就堵
@@ -441,7 +455,7 @@ export function chooseMove(
   const threat = legal.find((c) => wouldWin(e, c, opp));
   if (threat !== undefined) {
     // 简单档偶尔漏看对手的一步胜，故意走出无法封堵的着法。
-    if (difficulty === 'easy' && Math.random() < 0.25) {
+    if (difficulty === 'easy' && Math.random() < 0.4) {
       const blunders = legal.filter((c) => givesOpponentWin(e, c, player));
       if (blunders.length > 0) {
         const col = blunders[Math.floor(Math.random() * blunders.length)];
@@ -452,7 +466,7 @@ export function chooseMove(
   }
 
   // 简单档：偶尔故意走一步不是最优的（但不送四连）
-  if (difficulty === 'easy' && Math.random() < 0.32) {
+  if (difficulty === 'easy' && Math.random() < 0.5) {
     const safe = legal.filter((c) => !givesOpponentWin(e, c, player));
     const pool = safe.length > 0 ? safe : legal;
     const col = pool[Math.floor(Math.random() * pool.length)];
