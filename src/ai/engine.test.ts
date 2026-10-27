@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CELL_COUNT, COLS, makeConfig } from '../game/rules';
 import { chooseMove, type Difficulty } from './engine';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function emptyBoard(): number[] {
   return new Array<number>(CELL_COUNT).fill(0);
@@ -28,6 +32,30 @@ describe('chooseMove', () => {
     board[1] = 2;
     board[2] = 2;
     const result = chooseMove(board, [1, 1, 1, 0, 0, 0], 1, 'normal');
+    expect(result.col).toBe(3);
+  });
+
+  it('简单档有概率漏挡对手的一手胜', () => {
+    const board = emptyBoard();
+    board[0] = 2;
+    board[1] = 2;
+    board[2] = 2;
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    const result = chooseMove(board, [1, 1, 1, 0, 0, 0], 1, 'easy');
+
+    expect(result.col).not.toBe(3);
+  });
+
+  it('简单档通常会挡对手的一手胜', () => {
+    const board = emptyBoard();
+    board[0] = 2;
+    board[1] = 2;
+    board[2] = 2;
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const result = chooseMove(board, [1, 1, 1, 0, 0, 0], 1, 'easy');
+
     expect(result.col).toBe(3);
   });
 

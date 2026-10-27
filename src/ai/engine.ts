@@ -438,10 +438,17 @@ export function chooseMove(
 
   // 对手下一手能赢就堵
   const opp = other(player);
-  for (const c of legal) {
-    if (wouldWin(e, c, opp)) {
-      return { col: c, score: 0, depth: 1, nodes: 0, ms: performance.now() - started };
+  const threat = legal.find((c) => wouldWin(e, c, opp));
+  if (threat !== undefined) {
+    // 简单档偶尔漏看对手的一步胜，故意走出无法封堵的着法。
+    if (difficulty === 'easy' && Math.random() < 0.25) {
+      const blunders = legal.filter((c) => givesOpponentWin(e, c, player));
+      if (blunders.length > 0) {
+        const col = blunders[Math.floor(Math.random() * blunders.length)];
+        return { col, score: 0, depth: 0, nodes: 0, ms: performance.now() - started };
+      }
     }
+    return { col: threat, score: 0, depth: 1, nodes: 0, ms: performance.now() - started };
   }
 
   // 简单档：偶尔故意走一步不是最优的（但不送四连）
