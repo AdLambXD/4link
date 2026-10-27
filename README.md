@@ -11,6 +11,7 @@
 - 人机对战三档（简单 / 普通 / 困难，仅 1v1）
 - AI 在 Web Worker 中搜索，按棋盘尺寸自动限深
 - 7 道残局谜题（1–3 步杀，6×6 / 8×8）：玩家固定先手，AI 最优防守，限步取胜
+- 6 节新手教程：重力、横 / 竖 / 斜线、封堵与「先赢再挡」，逐步引导并记录进度
 - 围棋式交叉点网格、星位、木框与行列坐标；棋子落在交叉点上
 - 4 套可扩展**整站主题**：和纸 / 榧木 / 青瓷 / 蓝染（暗色），纸张、墨色、控件与棋盘一起切换
 - 设置面板：整站主题、1–6 号棋子自定义颜色、棋子自定义图片，修改即时生效并持久化
@@ -18,7 +19,7 @@
 - 落子动画、获胜连线高亮、悬停列提示与落点幽灵
 - 悔棋、重开、提示、音效开关
 - 键盘 `1`–`0` 落子，`Esc` 悔棋，`R` 重开
-- 本场胜局记分；双人战绩与残局进度持久化（localStorage）
+- 本场胜局记分；双人战绩、残局进度与教程进度持久化（localStorage）
 
 ## 快速开始
 
@@ -29,7 +30,7 @@ npm install
 npm run dev      # 开发
 npm run build    # 类型检查 + 生产构建
 npm run preview  # 预览构建产物
-npm test         # 规则、AI、残局与外观测试
+npm test         # 规则、AI、残局、教程与外观测试
 ```
 
 ## 一键启动
@@ -49,7 +50,7 @@ chmod +x start-linux.sh
 
 ## GitHub Pages 部署
 
-仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages；同时会创建一个 GitHub Release，附带构建产物 `4link-dist.zip`。Release 标签格式为 `v<版本号>-build.<运行序号>`（例如 `v0.4.0-build.17`），每次推送到 `main` 生成一个。
+仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages；同时会创建一个 GitHub Release，附带构建产物 `4link-dist.zip`。Release 标签格式为 `v<版本号>-build.<运行序号>`（例如 `v0.5.0-build.17`），每次推送到 `main` 生成一个。
 
 1. 打开仓库的 **Settings → Pages**。
 2. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
@@ -117,8 +118,10 @@ src/
 ├─ game/
 │  ├─ rules.ts          # 纯函数规则：尺寸/人数配置、落子、判胜、和棋、悔棋 reducer
 │  ├─ rules.test.ts     # perft + 四方向判胜 + 多人轮转 + 载入残局
-│  ├─ puzzle.ts         # 残局类型、ASCII 盘面校验、精确求解器、7 道关卡
-│  └─ puzzle.test.ts    # 关卡合法性、限步强制胜、首着唯一性
+│  ├─ puzzle.ts         # 预设盘面校验、精确求解器、7 道残局
+│  ├─ puzzle.test.ts    # 残局合法性、限步强制胜、首着唯一性
+│  ├─ tutorial.ts       # 6 节新手教程的盘面、步骤与完成判定
+│  └─ tutorial.test.ts  # 教程步骤可走通、重力与胜负结果
 ├─ ai/
 │  ├─ engine.ts         # 按尺寸参数化的 negamax + α-β + Zobrist + 迭代加深
 │  ├─ engine.test.ts    # 赢棋 / 挡棋 / 合法性 / 大棋盘
@@ -127,12 +130,15 @@ src/
 │  ├─ useAiEngine.ts    # Worker 请求封装
 │  ├─ useAppearance.ts  # 整站主题与棋子覆盖注入、持久化
 │  ├─ usePuzzleProgress.ts # 残局进度与最佳步数持久化
+│  ├─ useTutorialProgress.ts # 教程完成进度持久化
 │  └─ useStats.ts       # 双人战绩持久化
 ├─ components/
 │  ├─ Board.tsx         # 围棋式网格棋盘、交叉点棋子、落子动画
-│  ├─ Menu.tsx          # 模式 / 人数 / 尺寸 / 难度 / 先手 / 外观入口 / 残局
+│  ├─ Menu.tsx          # 模式 / 人数 / 尺寸 / 难度 / 先手 / 外观入口 / 残局 / 教程
 │  ├─ Settings.tsx      # 整站主题、棋子颜色与图片设置面板
 │  ├─ Controls.tsx      # 悔棋 / 重开 / 提示 / 音效
+│  ├─ TutorialCoach.tsx # 教程步骤、提示与点错反馈
+│  ├─ TutorialPanel.tsx # 教程完成 / 下一课结算
 │  ├─ PuzzlePanel.tsx   # 残局成功 / 失败 / 下一题结算
 │  └─ ResultPanel.tsx   # N 人结算面板
 ├─ skins.ts             # 整站主题注册表
@@ -153,6 +159,7 @@ src/
 - **AI 按尺寸限深**：6×6 深 14、8×8 深 9、12×12 深 6、16×16 深 5，时间预算同步收紧。
 - **多人不接 AI**：现有 negamax 是两人博弈模型；3 人以上只做本地轮流。
 - **残局单独求解**：常规 AI 是带时间预算的启发式搜索；谜题提示与防守改用短深度精确求解器，保证限步内的强制胜和最优拖延。
+- **教程不靠求解器**：教程盘面与步骤全部人工编排，玩家点错列不会落子，只给纠正提示；完成判定与残局共用同一套 `createPositionState()` 校验。
 - **不用外部状态库**：一局棋用 `useReducer` 足够。
 - **AI 放 Worker**：困难档最长约 1.4s，避免阻塞主线程；残局求解深度浅，直接在主线程计算。
 
@@ -162,6 +169,7 @@ src/
 - 3–6 人模式没有 AI，也没有联机。
 - 16×16 的 AI 会主动限深，强度低于小盘。
 - 残局目前是 7 道固定关卡，没有关卡编辑器；新增关卡需在 `src/game/puzzle.ts` 写盘面并跑测试验证。
+- 教程目前是 6 节固定课程，步骤与对手应手都写死在 `src/game/tutorial.ts`；暂不支持自定义课程或自由练习模式，教程中也不能悔棋。
 - 暂无棋谱复盘（见路线图）。
 
 ## Roadmap
@@ -170,7 +178,7 @@ src/
 - [x] v0.2 方形围棋盘、4 套皮肤、2–6 人本地对战、8/12/16 大棋盘
 - [x] v0.3 残局谜题模式：7 道限步杀、AI 最优防守、提示与进度
 - [x] v0.4 整站主题、设置面板、棋子自定义颜色与图片
-- [ ] v0.5 新手教程
+- [x] v0.5 新手教程：6 节逐步引导、点错纠正、完成进度
 - [ ] 联机对战 / 复盘
 
 ## 参考

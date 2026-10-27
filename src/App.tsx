@@ -7,6 +7,8 @@ import { Menu, type MatchConfig } from './components/Menu';
 import { PuzzlePanel } from './components/PuzzlePanel';
 import { ResultPanel } from './components/ResultPanel';
 import { Settings } from './components/Settings';
+import { TutorialCoach } from './components/TutorialCoach';
+import { TutorialPanel } from './components/TutorialPanel';
 import {
   PUZZLES,
   createPuzzleState,
@@ -15,7 +17,16 @@ import {
   getPuzzle,
 } from './game/puzzle';
 import {
+  TUTORIALS,
+  createTutorialState,
+  getNextTutorial,
+  getTutorial,
+  isTutorialComplete,
+} from './game/tutorial';
+import {
+  colLabel,
   createSession,
+  drop,
   makeConfig,
   sessionReducer,
   type DuoPlayer,
@@ -24,6 +35,7 @@ import { useAiEngine } from './hooks/useAiEngine';
 import { useAppearance } from './hooks/useAppearance';
 import { usePuzzleProgress } from './hooks/usePuzzleProgress';
 import { useStats } from './hooks/useStats';
+import { useTutorialProgress } from './hooks/useTutorialProgress';
 import { playDrop, playWin } from './lib/sound';
 
 type Screen = 'menu' | 'game';
@@ -35,6 +47,7 @@ const DEFAULT_CONFIG: MatchConfig = {
   players: 2,
   size: 6,
   puzzleId: null,
+  tutorialId: null,
 };
 
 interface Series {
@@ -63,6 +76,9 @@ export default function App() {
   const [puzzleHints, setPuzzleHints] = useState(0);
   const [puzzleExhausted, setPuzzleExhausted] = useState(false);
   const [puzzleNotice, setPuzzleNotice] = useState<string | null>(null);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [tutorialReply, setTutorialReply] = useState<number | null>(null);
+  const [tutorialFeedback, setTutorialFeedback] = useState<string | null>(null);
 
   const requestMove = useAiEngine();
   const {
@@ -79,10 +95,20 @@ export default function App() {
     recordSolve,
     reset: resetPuzzles,
   } = usePuzzleProgress();
+  const {
+    progress: tutorialProgress,
+    recordSolve: recordTutorialSolve,
+    reset: resetTutorials,
+  } = useTutorialProgress();
 
   const state = session.current;
   const game = state.config;
   const puzzle = match.mode === 'puzzle' ? getPuzzle(match.puzzleId) ?? PUZZLES[0] : null;
+  const tutorial =
+    match.mode === 'tutorial' ? getTutorial(match.tutorialId) ?? TUTORIALS[0] : null;
+  const tutorialComplete = tutorial
+    ? isTutorialComplete(tutorial, state, tutorialStep)
+    : false;
   const aiPlayer: DuoPlayer | null =
     match.mode === 'pve' ? ((match.humanFirst ? 2 : 1) as DuoPlayer) : null;
   const isAiTurn = aiPlayer !== null && state.turn === aiPlayer;
@@ -90,12 +116,14 @@ export default function App() {
   const remainingMoves = puzzle ? Math.max(0, puzzle.moveLimit - humanMoves) : 0;
   const usedMoves = puzzle ? Math.min(humanMoves, puzzle.moveLimit) : humanMoves;
   const nextPuzzle = puzzle ? getNextPuzzle(puzzle.id) : null;
+  const nextTutorial = tutorial ? getNextTutorial(tutorial.id) : null;
   const recordedRef = useRef(false);
   const prevCountRef = useRef(0);
 
   /* ---------- 结算 ---------- */
   useEffect(() => {
     if (screen !== 'game') return;
+    if (match.mode === 'tutorial') return;
     if (state.status === 'playing' && !puzzleExhausted) return;
     if (recordedRef.current) return;
     recordedRef.current = true;
@@ -138,15 +166,34 @@ export default function App() {
     recordSolve,
   ]);
 
+  /* ---------- 教程完成 ---------- */
+  useEffect(() => {
+    if (screen !== 'game' || match.mode !== 'tutorial' || !tutorial || !tutorialComplete) {
+      return;
+    }
+    if (recordedRef.current) return;
+    recordedRef.current = true;
+    recordTutorialSolve(tutorial.id);
+    playWin(soundOn);
+  }, [
+    screen,
+    match.mode,
+    tutorial,
+    tutorialComplete,
+    recordTutorialSolve,
+    soundOn,
+  ]);
+
   /* ---------- 结算面板延迟出现，先让玩家看清连成的那条线 ---------- */
   useEffect(() => {
-    if (screen !== 'game' || (state.status === 'playing' && !puzzleExhausted)) {
+    const ended = state.status !== 'playing' || puzzleExhausted || tutorialComplete;
+    if (screen !== 'game' || !ended) {
       setResultVisible(false);
       return;
     }
     const timer = window.setTimeout(() => setResultVisible(true), 900);
     return () => window.clearTimeout(timer);
-  }, [screen, state.status, state.count, puzzleExhausted]);
+  }, [screen, state.status, state.count, puzzleExhausted, tutorialComplete]);
 
   /* ---------- 落子音效 ---------- */
   useEffect(() => {
@@ -232,6 +279,22 @@ export default function App() {
     session.past.length,
   ]);
 
+  /* ---------- 教程对手应手 ---------- */
+  useEffect(() => {
+    if (screen !== 'game' || match.mode !== 'tutorial' || tutorialReply === null) return;
+
+    const timer = window.setTimeout(() => {
+      if (state.heights[tutorialReply] < state.config.rows) {
+        dispatch({ type: 'play', col: tutorialReply });
+        setTutorialStep((step) => step + 1);
+      }
+      setTutorialReply(null);
+      setThinking(false);
+    }, 520);
+
+    return () => window.clearTimeout(timer);
+  }, [screen, match.mode, tutorialReply, state.heights, state.config.rows]);
+
   /* ---------- 玩家用完限定步数时，立即结束本次尝试 ---------- */
   useEffect(() => {
     if (screen !== 'game' || match.mode !== 'puzzle' || !puzzle) return;
@@ -251,8 +314,14 @@ export default function App() {
   const startMatch = useCallback((next: MatchConfig) => {
     const nextPuzzle =
       next.mode === 'puzzle' ? getPuzzle(next.puzzleId) ?? PUZZLES[0] : null;
+    const nextTutorial =
+      next.mode === 'tutorial' ? getTutorial(next.tutorialId) ?? TUTORIALS[0] : null;
     const nextPlayers = next.mode === 'pvp' ? next.players : 2;
-    const nextSize = nextPuzzle ? nextPuzzle.size : next.size;
+    const nextSize = nextPuzzle
+      ? nextPuzzle.size
+      : nextTutorial
+        ? nextTutorial.size
+        : next.size;
     const nextGame = makeConfig(nextSize, nextPlayers);
 
     setMatch({
@@ -260,11 +329,16 @@ export default function App() {
       players: nextPlayers,
       size: nextSize,
       puzzleId: nextPuzzle?.id ?? null,
+      tutorialId: nextTutorial?.id ?? null,
     });
     setSeries(emptySeries(nextPlayers));
 
     if (nextPuzzle) {
       const loaded = createPuzzleState(nextPuzzle);
+      dispatch({ type: 'load', state: loaded });
+      prevCountRef.current = loaded.count;
+    } else if (nextTutorial) {
+      const loaded = createTutorialState(nextTutorial);
       dispatch({ type: 'load', state: loaded });
       prevCountRef.current = loaded.count;
     } else {
@@ -280,6 +354,9 @@ export default function App() {
     setPuzzleHints(0);
     setPuzzleExhausted(false);
     setPuzzleNotice(null);
+    setTutorialStep(0);
+    setTutorialReply(null);
+    setTutorialFeedback(null);
     setScreen('game');
   }, []);
 
@@ -289,14 +366,46 @@ export default function App() {
       if (state.status !== 'playing') return;
       if (aiPlayer !== null && state.turn === aiPlayer) return;
       if (match.mode === 'puzzle' && state.turn !== 1) return;
+
+      if (match.mode === 'tutorial') {
+        if (!tutorial || tutorialComplete || tutorialReply !== null) return;
+        const step = tutorial.steps[tutorialStep];
+        if (!step) return;
+        if (col !== step.expect) {
+          setTutorialFeedback(`这一手试试 ${colLabel(step.expect)} 列。`);
+          return;
+        }
+        setTutorialFeedback(null);
+        const next = drop(state, col);
+        dispatch({ type: 'play', col });
+        if (next.status !== 'playing') return;
+        if (step.reply !== undefined) {
+          setThinking(true);
+          setTutorialReply(step.reply);
+        } else {
+          setTutorialStep((current) => current + 1);
+        }
+        return;
+      }
+
       setPuzzleNotice(null);
       dispatch({ type: 'play', col });
     },
-    [thinking, state.status, state.turn, aiPlayer, match.mode, puzzleExhausted],
+    [
+      thinking,
+      state,
+      aiPlayer,
+      match.mode,
+      puzzleExhausted,
+      tutorial,
+      tutorialStep,
+      tutorialComplete,
+      tutorialReply,
+    ],
   );
 
   const undo = useCallback(() => {
-    if (thinking || puzzleExhausted) return;
+    if (thinking || puzzleExhausted || match.mode === 'tutorial') return;
     if (state.status !== 'playing') return;
     const steps = match.mode === 'pve' || match.mode === 'puzzle' ? 2 : 1;
     setPuzzleNotice(null);
@@ -304,7 +413,11 @@ export default function App() {
   }, [thinking, state.status, match.mode, puzzleExhausted]);
 
   const restart = useCallback(() => {
-    if (puzzle) {
+    if (tutorial) {
+      const loaded = createTutorialState(tutorial);
+      dispatch({ type: 'load', state: loaded });
+      prevCountRef.current = loaded.count;
+    } else if (puzzle) {
       const loaded = createPuzzleState(puzzle);
       dispatch({ type: 'load', state: loaded });
       prevCountRef.current = loaded.count;
@@ -320,7 +433,10 @@ export default function App() {
     setPuzzleHints(0);
     setPuzzleExhausted(false);
     setPuzzleNotice(null);
-  }, [puzzle]);
+    setTutorialStep(0);
+    setTutorialReply(null);
+    setTutorialFeedback(null);
+  }, [puzzle, tutorial]);
 
   const swap = useCallback(() => {
     if (match.mode !== 'pve') return;
@@ -336,6 +452,14 @@ export default function App() {
   const askHint = useCallback(async () => {
     if (state.status !== 'playing' || thinking || hintLoading || puzzleExhausted) return;
     if (aiPlayer !== null && state.turn === aiPlayer) return;
+
+    if (match.mode === 'tutorial') {
+      const step = tutorial?.steps[tutorialStep];
+      if (!step) return;
+      setTutorialFeedback(null);
+      setHint(step.expect);
+      return;
+    }
 
     if (match.mode === 'puzzle') {
       if (!puzzle || state.turn !== puzzle.human || remainingMoves <= 0) return;
@@ -383,6 +507,8 @@ export default function App() {
     requestMove,
     game,
     puzzleExhausted,
+    tutorial,
+    tutorialStep,
   ]);
 
   /* ---------- 键盘 ---------- */
@@ -431,12 +557,14 @@ export default function App() {
           initial={match}
           stats={stats}
           puzzleProgress={puzzleProgress}
+          tutorialProgress={tutorialProgress}
           skin={skin}
           pieces={pieces}
           onOpenSettings={openSettings}
           onStart={startMatch}
           onResetStats={resetStats}
           onResetPuzzles={resetPuzzles}
+          onResetTutorials={resetTutorials}
         />
         {settingsOverlay}
       </div>
@@ -445,6 +573,8 @@ export default function App() {
 
   const turnLabel = (() => {
     if (puzzleExhausted) return '步数用尽';
+    if (tutorialComplete) return '教程完成';
+    if (tutorial) return thinking ? '对手回应中…' : '你的回合';
     if (state.status === 'draw') return '和棋';
     if (state.status === 'won') {
       if (puzzle) return state.winner === puzzle.human ? '解开了' : '防守成功';
@@ -462,26 +592,34 @@ export default function App() {
     return `玩家 ${state.turn} 回合`;
   })();
 
-  const modeLabel = puzzle
-    ? `残局 · NO.${String(puzzle.no).padStart(2, '0')} · ${game.cols}×${game.rows}`
-    : match.mode === 'pve'
-      ? `人机 · ${DIFFICULTY_LABELS[match.difficulty]} · ${game.cols}×${game.rows}`
-      : `本地 · ${game.players} 人 · ${game.cols}×${game.rows}`;
+  const modeLabel = tutorial
+    ? `教程 · NO.${String(tutorial.no).padStart(2, '0')} · ${game.cols}×${game.rows}`
+    : puzzle
+      ? `残局 · NO.${String(puzzle.no).padStart(2, '0')} · ${game.cols}×${game.rows}`
+      : match.mode === 'pve'
+        ? `人机 · ${DIFFICULTY_LABELS[match.difficulty]} · ${game.cols}×${game.rows}`
+        : `本地 · ${game.players} 人 · ${game.cols}×${game.rows}`;
 
   const canHint =
-    match.mode === 'puzzle'
-      ? Boolean(puzzle) &&
-        state.status === 'playing' &&
-        state.turn === 1 &&
-        !thinking &&
-        !hintLoading &&
-        !puzzleExhausted &&
-        remainingMoves > 0
-      : game.players === 2 &&
+    match.mode === 'tutorial'
+      ? Boolean(tutorial) &&
+        !tutorialComplete &&
         state.status === 'playing' &&
         !thinking &&
-        !hintLoading &&
-        !isAiTurn;
+        !hintLoading
+      : match.mode === 'puzzle'
+        ? Boolean(puzzle) &&
+          state.status === 'playing' &&
+          state.turn === 1 &&
+          !thinking &&
+          !hintLoading &&
+          !puzzleExhausted &&
+          remainingMoves > 0
+        : game.players === 2 &&
+          state.status === 'playing' &&
+          !thinking &&
+          !hintLoading &&
+          !isAiTurn;
 
   const startNextPuzzle = () => {
     if (!nextPuzzle) return;
@@ -490,6 +628,17 @@ export default function App() {
       mode: 'puzzle',
       puzzleId: nextPuzzle.id,
       size: nextPuzzle.size,
+      players: 2,
+    });
+  };
+
+  const startNextTutorial = () => {
+    if (!nextTutorial) return;
+    startMatch({
+      ...match,
+      mode: 'tutorial',
+      tutorialId: nextTutorial.id,
+      size: nextTutorial.size,
       players: 2,
     });
   };
@@ -528,7 +677,18 @@ export default function App() {
               <span>{turnLabel}</span>
             </div>
 
-            {puzzle ? (
+            {tutorial ? (
+              <div className="score-inline puzzle-limits" title="教程进度">
+                <span>
+                  课程 {tutorial.no} / {TUTORIALS.length}
+                </span>
+                <span className="score-draws">
+                  {tutorialComplete
+                    ? '完成'
+                    : `步骤 ${Math.min(tutorialStep + 1, tutorial.steps.length)} / ${tutorial.steps.length}`}
+                </span>
+              </div>
+            ) : puzzle ? (
               <div className="score-inline puzzle-limits" title="限定步数">
                 <span>限 {puzzle.moveLimit} 步</span>
                 <span className="score-draws">
@@ -551,23 +711,54 @@ export default function App() {
           </div>
         </header>
 
+        {tutorial && (
+          <TutorialCoach
+            lesson={tutorial}
+            stepIndex={tutorialStep}
+            thinking={thinking}
+            feedback={tutorialFeedback}
+            complete={tutorialComplete}
+          />
+        )}
+
         <div className="board-wrap">
           <Board
             state={state}
-            disabled={thinking || isAiTurn || puzzleExhausted}
+            disabled={thinking || isAiTurn || puzzleExhausted || tutorialComplete}
             hint={game.players === 2 ? hint : null}
             onPlay={play}
-            title={puzzle ? `残局 · ${puzzle.title}` : undefined}
+            title={
+              tutorial
+                ? `新手教程 · ${tutorial.title}`
+                : puzzle
+                  ? `残局 · ${puzzle.title}`
+                  : undefined
+            }
             meta={
-              puzzle
-                ? `${puzzle.size} × ${puzzle.size} · 限 ${puzzle.moveLimit} 步`
-                : undefined
+              tutorial
+                ? `${tutorial.size} × ${tutorial.size} · 教程`
+                : puzzle
+                  ? `${puzzle.size} × ${puzzle.size} · 限 ${puzzle.moveLimit} 步`
+                  : undefined
             }
             footer={
-              puzzle ? `PUZZLE · 你执先手 · ${puzzle.moveLimit} 步内取胜` : undefined
+              tutorial
+                ? 'TUTORIAL · 跟着提示点击列'
+                : puzzle
+                  ? `PUZZLE · 你执先手 · ${puzzle.moveLimit} 步内取胜`
+                  : undefined
             }
           />
-          {puzzle ? (
+          {tutorial ? (
+            <TutorialPanel
+              lesson={tutorial}
+              nextLesson={nextTutorial}
+              visible={resultVisible && tutorialComplete}
+              onAgain={restart}
+              onNext={startNextTutorial}
+              onMenu={() => setScreen('menu')}
+            />
+          ) : puzzle ? (
             <PuzzlePanel
               puzzle={puzzle}
               state={state}
@@ -605,6 +796,7 @@ export default function App() {
           canUndo={
             state.status === 'playing' &&
             !puzzleExhausted &&
+            !tutorial &&
             session.past.length > 0 &&
             !thinking
           }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { DIFFICULTY_LABELS, type Difficulty } from '../ai/engine';
 import { PUZZLES, getPuzzle } from '../game/puzzle';
+import { TUTORIALS, getTutorial } from '../game/tutorial';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
 import type { PuzzleProgress, PuzzleRecord } from '../hooks/usePuzzleProgress';
+import type { TutorialProgress } from '../hooks/useTutorialProgress';
 import type { Stats } from '../hooks/useStats';
 import {
   PLAYER_NUMBERS,
@@ -14,24 +16,27 @@ import type { Skin } from '../skins';
 import { ArrowRightIcon, SettingsIcon } from './Icons';
 
 export interface MatchConfig {
-  mode: 'pvp' | 'pve' | 'puzzle';
+  mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial';
   difficulty: Difficulty;
   humanFirst: boolean;
   players: number;
   size: BoardSize;
   puzzleId: string | null;
+  tutorialId: string | null;
 }
 
 interface MenuProps {
   initial: MatchConfig;
   stats: Stats;
   puzzleProgress: PuzzleProgress;
+  tutorialProgress: TutorialProgress;
   skin: Skin;
   pieces: PieceCustomization;
   onOpenSettings: () => void;
   onStart: (config: MatchConfig) => void;
   onResetStats: () => void;
   onResetPuzzles: () => void;
+  onResetTutorials: () => void;
 }
 
 const PLAYER_COUNTS = Array.from(
@@ -45,23 +50,32 @@ export function Menu({
   initial,
   stats,
   puzzleProgress,
+  tutorialProgress,
   skin,
   pieces,
   onOpenSettings,
   onStart,
   onResetStats,
   onResetPuzzles,
+  onResetTutorials,
 }: MenuProps) {
   const firstUnsolved = PUZZLES.find((puzzle) => !puzzleProgress[puzzle.id]?.solved) ?? PUZZLES[0];
+  const firstUnsolvedTutorial =
+    TUTORIALS.find((lesson) => !tutorialProgress[lesson.id]) ?? TUTORIALS[0];
   const [mode, setMode] = useState<MatchConfig['mode']>(initial.mode);
   const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty);
   const [humanFirst, setHumanFirst] = useState(initial.humanFirst);
   const [players, setPlayers] = useState(initial.players);
   const [size, setSize] = useState<BoardSize>(initial.size);
   const [puzzleId, setPuzzleId] = useState(() => getPuzzle(initial.puzzleId)?.id ?? firstUnsolved.id);
+  const [tutorialId, setTutorialId] = useState(
+    () => getTutorial(initial.tutorialId)?.id ?? firstUnsolvedTutorial.id,
+  );
 
   const selectedPuzzle = getPuzzle(puzzleId) ?? firstUnsolved;
+  const selectedTutorial = getTutorial(tutorialId) ?? firstUnsolvedTutorial;
   const solvedCount = PUZZLES.filter((puzzle) => puzzleProgress[puzzle.id]?.solved).length;
+  const tutorialSolvedCount = TUTORIALS.filter((lesson) => tutorialProgress[lesson.id]).length;
   const solvedRecords = PUZZLES.map((puzzle) => puzzleProgress[puzzle.id]).filter(
     (record): record is PuzzleRecord => Boolean(record?.solved),
   );
@@ -79,8 +93,14 @@ export function Menu({
       difficulty,
       humanFirst,
       players: mode === 'pvp' ? players : 2,
-      size: mode === 'puzzle' ? selectedPuzzle.size : size,
+      size:
+        mode === 'puzzle'
+          ? selectedPuzzle.size
+          : mode === 'tutorial'
+            ? selectedTutorial.size
+            : size,
       puzzleId: mode === 'puzzle' ? selectedPuzzle.id : null,
+      tutorialId: mode === 'tutorial' ? selectedTutorial.id : null,
     });
   };
 
@@ -113,30 +133,86 @@ export function Menu({
           <span className="block-num">{num()}</span>
           <h2>对战模式</h2>
         </div>
-        <div className="choices choices-3">
+        <div className="choices choices-4">
           <button
-            className={`choice${mode === 'pve' ? ' is-on' : ''}`}
+            className={`choice choice-compact choice-mode${mode === 'pve' ? ' is-on' : ''}`}
             onClick={() => setMode('pve')}
           >
             <span className="choice-main">人机对战</span>
             <span className="choice-note">SOLO</span>
           </button>
           <button
-            className={`choice${mode === 'pvp' ? ' is-on' : ''}`}
+            className={`choice choice-compact choice-mode${mode === 'pvp' ? ' is-on' : ''}`}
             onClick={() => setMode('pvp')}
           >
             <span className="choice-main">本地多人</span>
             <span className="choice-note">LOCAL</span>
           </button>
           <button
-            className={`choice${mode === 'puzzle' ? ' is-on' : ''}`}
+            className={`choice choice-compact choice-mode${mode === 'puzzle' ? ' is-on' : ''}`}
             onClick={() => setMode('puzzle')}
           >
             <span className="choice-main">残局谜题</span>
             <span className="choice-note">PUZZLE</span>
           </button>
+          <button
+            className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
+            onClick={() => setMode('tutorial')}
+          >
+            <span className="choice-main">新手教程</span>
+            <span className="choice-note">GUIDE</span>
+          </button>
         </div>
       </section>
+
+      {mode === 'tutorial' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>选择课程</h2>
+            <span className="puzzle-head-meta">
+              <span className="puzzle-count">
+                已学 {tutorialSolvedCount} / {TUTORIALS.length}
+              </span>
+              {tutorialSolvedCount > 0 && (
+                <button className="text-btn puzzle-reset" onClick={onResetTutorials}>
+                  重置
+                </button>
+              )}
+            </span>
+          </div>
+          <div className="puzzle-grid">
+            {TUTORIALS.map((lesson) => {
+              const done = Boolean(tutorialProgress[lesson.id]);
+              const isOn = lesson.id === selectedTutorial.id;
+              return (
+                <button
+                  key={lesson.id}
+                  className={`puzzle-card${isOn ? ' is-on' : ''}${done ? ' is-solved' : ''}`}
+                  onClick={() => setTutorialId(lesson.id)}
+                  aria-pressed={isOn}
+                >
+                  <span className="puzzle-card-top">
+                    <span className="puzzle-no">
+                      NO.{String(lesson.no).padStart(2, '0')}
+                    </span>
+                    <span className="puzzle-check" aria-label={done ? '已学习' : '未学习'}>
+                      {done ? '✓' : ''}
+                    </span>
+                  </span>
+                  <span className="puzzle-title">{lesson.title}</span>
+                  <span className="puzzle-meta">
+                    {lesson.size}×{lesson.size} · {lesson.steps.length} 步引导
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="puzzle-brief">
+            {selectedTutorial.goal} {selectedTutorial.tip}
+          </p>
+        </section>
+      )}
 
       {mode === 'puzzle' && (
         <section className="block">
@@ -209,7 +285,7 @@ export function Menu({
         </section>
       )}
 
-      {mode !== 'puzzle' && (
+      {(mode === 'pve' || mode === 'pvp') && (
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
@@ -336,11 +412,26 @@ export function Menu({
       </section>
 
       <button className="start-btn" onClick={start}>
-        <span>{mode === 'puzzle' ? '开始解谜' : '开始对局'}</span>
+        <span>
+          {mode === 'puzzle' ? '开始解谜' : mode === 'tutorial' ? '开始教程' : '开始对局'}
+        </span>
         <ArrowRightIcon />
       </button>
 
-      {mode === 'puzzle' ? (
+      {mode === 'tutorial' ? (
+        <div className="scorecard">
+          <span className="scorecard-title">教程进度</span>
+          <span className="score-item">
+            <span className="puzzle-check">✓</span>
+            {tutorialSolvedCount} / {TUTORIALS.length}
+          </span>
+          <span className="score-draw">
+            {tutorialSolvedCount === TUTORIALS.length
+              ? '全部完成'
+              : '从落子开始，一关一关学'}
+          </span>
+        </div>
+      ) : mode === 'puzzle' ? (
         <div className="scorecard">
           <span className="scorecard-title">残局进度</span>
           <span className="score-item">
@@ -372,7 +463,13 @@ export function Menu({
       <details className="notes">
         <summary>怎么玩</summary>
         <ul>
-          {mode === 'puzzle' ? (
+          {mode === 'tutorial' ? (
+            <>
+              <li>教程会手把手指定落点；点错不会落子，可以放心尝试。</li>
+              <li>6 节课依次介绍重力、横 / 竖 / 斜线、封堵和胜负优先级。</li>
+              <li>完成进度保存在本机；随时可以重开当前课程。</li>
+            </>
+          ) : mode === 'puzzle' ? (
             <>
               <li>每个残局都是一个未完成的盘面，你在限定步数内连成目标数即胜。</li>
               <li>你固定执先手，AI 执后手；AI 会按最优防守尽量拖长战线。</li>

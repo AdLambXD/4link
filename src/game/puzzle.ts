@@ -60,34 +60,39 @@ function parseCell(ch: string, puzzleId: string, row: number, col: number): Cell
   if (ch === '.') return 0;
   if (ch === 'X' || ch === '1') return 1;
   if (ch === 'O' || ch === '2') return 2;
-  throw new Error(`谜题 ${puzzleId} 第 ${row + 1} 行第 ${col + 1} 格字符非法：${ch}`);
+  throw new Error(`局面 ${puzzleId} 第 ${row + 1} 行第 ${col + 1} 格字符非法：${ch}`);
+}
+
+/** 预设盘面的公共定义：残局、教程等都从这里生成 GameState。 */
+export interface PositionDefinition {
+  readonly id: string;
+  readonly size: BoardSize;
+  readonly human: DuoPlayer;
+  readonly turn: DuoPlayer;
+  /** 自上而下的盘面，长度 = size */
+  readonly rows: readonly string[];
 }
 
 /** 从 ASCII 盘面生成可玩的 GameState，同时校验重力、既有连线和手数奇偶。 */
-export function createPuzzleState(puzzle: Puzzle): GameState {
-  const { size, turn } = puzzle;
+export function createPositionState(position: PositionDefinition): GameState {
+  const { id, size, turn } = position;
   const config = makeConfig(size, 2);
 
-  if (puzzle.rows.length !== size) {
-    throw new Error(`谜题 ${puzzle.id} 需要 ${size} 行，实际 ${puzzle.rows.length} 行`);
+  if (position.rows.length !== size) {
+    throw new Error(`局面 ${id} 需要 ${size} 行，实际 ${position.rows.length} 行`);
   }
 
   const board = new Array<Cell>(size * size).fill(0);
   for (let displayRow = 0; displayRow < size; displayRow++) {
-    const line = puzzle.rows[displayRow];
+    const line = position.rows[displayRow];
     if (line.length !== size) {
       throw new Error(
-        `谜题 ${puzzle.id} 第 ${displayRow + 1} 行需要 ${size} 格，实际 ${line.length} 格`,
+        `局面 ${id} 第 ${displayRow + 1} 行需要 ${size} 格，实际 ${line.length} 格`,
       );
     }
     const boardRow = size - 1 - displayRow;
     for (let col = 0; col < size; col++) {
-      board[boardRow * size + col] = parseCell(
-        line[col],
-        puzzle.id,
-        displayRow,
-        col,
-      );
+      board[boardRow * size + col] = parseCell(line[col], id, displayRow, col);
     }
   }
 
@@ -99,7 +104,7 @@ export function createPuzzleState(puzzle: Puzzle): GameState {
       if (value === 0) {
         foundEmpty = true;
       } else if (foundEmpty) {
-        throw new Error(`谜题 ${puzzle.id} 的 ${col + 1} 列有悬空棋子`);
+        throw new Error(`局面 ${id} 的 ${col + 1} 列有悬空棋子`);
       }
     }
     while (heights[col] < size && board[heights[col] * size + col] !== 0) {
@@ -112,22 +117,17 @@ export function createPuzzleState(puzzle: Puzzle): GameState {
       const value = board[row * size + col];
       if (value === 0) continue;
       if (lineAt(board, row, col, value as DuoPlayer, config)) {
-        throw new Error(`谜题 ${puzzle.id} 开局已经存在 ${config.win} 连`);
+        throw new Error(`局面 ${id} 开局已经存在 ${config.win} 连`);
       }
     }
   }
 
   const count = board.reduce<number>((sum, value) => sum + (value === 0 ? 0 : 1), 0);
   if (count % 2 !== (turn === 1 ? 0 : 1)) {
-    throw new Error(
-      `谜题 ${puzzle.id} 的手数奇偶不合法：${count} 子，轮到 ${turn} 号`,
-    );
+    throw new Error(`局面 ${id} 的手数奇偶不合法：${count} 子，轮到 ${turn} 号`);
   }
-  if (puzzle.human !== turn) {
-    throw new Error(`谜题 ${puzzle.id} 开始时必须轮到玩家`);
-  }
-  if (puzzle.moveLimit < 1) {
-    throw new Error(`谜题 ${puzzle.id} 的步数限制必须大于 0`);
+  if (position.human !== turn) {
+    throw new Error(`局面 ${id} 开始时必须轮到玩家`);
   }
 
   return {
@@ -141,6 +141,13 @@ export function createPuzzleState(puzzle: Puzzle): GameState {
     last: null,
     count,
   };
+}
+
+export function createPuzzleState(puzzle: Puzzle): GameState {
+  if (puzzle.moveLimit < 1) {
+    throw new Error(`谜题 ${puzzle.id} 的步数限制必须大于 0`);
+  }
+  return createPositionState(puzzle);
 }
 
 /** 中心优先的走法顺序，和 AI 的直觉一致，也让同分时结果稳定。 */

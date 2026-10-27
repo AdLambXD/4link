@@ -1536,6 +1536,95 @@ button {
   text-align: center;
 }
 
+/* ---------- 新手教程 ---------- */
+
+.choice-mode .choice-main {
+  font-size: 12px;
+}
+
+.tutorial-coach {
+  padding: 10px 12px 9px;
+  border: 1px solid var(--rule-strong);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  background: var(--paper-hi);
+  box-shadow: 3px 3px 0 rgb(var(--shadow-rgb) / 0.06);
+}
+
+.tutorial-coach.is-done {
+  border-left-color: var(--p2);
+  background: color-mix(in srgb, var(--p2) 7%, var(--paper-hi));
+}
+
+.tutorial-coach-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.tutorial-coach-body {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+}
+
+.tutorial-coach-copy h2 {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.tutorial-coach-copy p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.tutorial-tip,
+.tutorial-feedback {
+  margin: 6px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.tutorial-feedback {
+  color: var(--accent);
+}
+
+.tutorial-dots {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+.tutorial-dots span {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--rule-strong);
+  background: transparent;
+}
+
+.tutorial-dots .is-now {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.tutorial-dots .is-done {
+  border-color: var(--ink-soft);
+  background: var(--ink-soft);
+}
+
 /* ---------- 设置 ---------- */
 
 .settings-backdrop {
