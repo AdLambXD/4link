@@ -49,7 +49,7 @@ chmod +x start-linux.sh
 
 ## GitHub Pages 部署
 
-仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages。
+仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages；同时会创建一个 GitHub Release，附带构建产物 `4link-dist.zip`。Release 标签格式为 `v<版本号>-build.<运行序号>`（例如 `v0.4.0-build.17`），每次推送到 `main` 生成一个。
 
 1. 打开仓库的 **Settings → Pages**。
 2. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
@@ -170,6 +170,7 @@ src/
 - [x] v0.2 方形围棋盘、4 套皮肤、2–6 人本地对战、8/12/16 大棋盘
 - [x] v0.3 残局谜题模式：7 道限步杀、AI 最优防守、提示与进度
 - [x] v0.4 整站主题、设置面板、棋子自定义颜色与图片
+- [ ] v0.5 新手教程
 - [ ] 联机对战 / 复盘
 
 ## 参考

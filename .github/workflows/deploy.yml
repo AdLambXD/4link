@@ -6,13 +6,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # 不取消进行中的运行，保证每次推送都能完成部署并创建对应 Release。
+  cancel-in-progress: false
 
 env:
   # 自定义域名时，在仓库 Settings -> Secrets and variables -> Actions
@@ -44,6 +45,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Package release
+        run: cd dist && zip -r ../4link-dist.zip .
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 4link-dist
+          path: 4link-dist.zip
+          retention-days: 7
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -59,3 +70,41 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  release:
+    needs: [build, deploy]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 4link-dist
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Read package version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.pkg.outputs.version }}-build.${{ github.run_number }}"
+          TITLE="v${{ steps.pkg.outputs.version }} build ${{ github.run_number }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" 4link-dist.zip --clobber
+          else
+            gh release create "$TAG" 4link-dist.zip \
+              --target "${{ github.sha }}" \
+              --title "$TITLE" \
+              --generate-notes
+          fi
+
