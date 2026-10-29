@@ -8,6 +8,7 @@
 
 - 6×6 / 8×8 / 12×12 / 16×16 四种方形棋盘（6、8 盘连 4，12、16 盘连 5）
 - 本地 2–6 人轮流对战（hot-seat），棋子颜色随人数增加
+- 联机 1v1（实验）：房间码 / 分享链接，WebRTC P2P 直连，房主权威同步
 - 人机对战三档（简单 / 普通 / 困难，仅 1v1）
 - AI 在 Web Worker 中搜索，按棋盘尺寸自动限深
 - 12 道残局谜题（1–3 步杀，6×6 / 8×8）：玩家固定先手，AI 最优防守，限步取胜
@@ -87,6 +88,28 @@ chmod +x start-linux.sh
 - 斜线是主战场：竖四基本靠对手漏防，横四常要叠在对手棋子上。
 - 6×6 四子棋已被求解：**后手必胜**，完美对局会在第 36 手（满盘）结束。所以本项目的「困难」是强启发式搜索，不是完美解。8×8 以上没有做求解。
 
+## 联机对战（实验）
+
+`explore/online-play` 分支加入 1v1 联机：房主创建房间后把 5 位房间码或分享链接发给对手，两台设备通过 WebRTC 直连，棋步不经过服务器。
+
+- 房主执先手，棋盘尺寸由房主选择；访客加入后自动开局。
+- 房主是唯一权威：访客只上报落子列，房主用同一套 `rules.ts` 校验后广播完整局面，两端不会分叉；校验失败会自动重发快照。
+- 联机下禁用悔棋与提示；「再来一局」需要双方各点一次。
+- 对手掉线后房间保留，用同一房间码重新加入即可续局；房间已有对手时，新连接会被拒绝。
+- 信令走 Trystero 的 nostr 公共中继，只交换 SDP / ICE；部分严格 NAT 或公司网络需要配置 TURN 才能连上。
+
+本机调试（同一浏览器开两个标签页，不经过 WebRTC）：
+
+```bash
+npm run dev -- --host
+# 房主：http://localhost:5173/?net=local
+# 访客：http://localhost:5173/?net=local&room=<房间码>
+```
+
+`?net=local` 只在开发环境生效，用 BroadcastChannel 模拟房间，方便验证同步、重连和再来一局；正式构建始终走 WebRTC。
+
+当前限制：只支持 1v1；没有观战、计时和断线判负；联机战绩不写入本地双人战绩。
+
 ## 外观与设置
 
 点击菜单报头或对局顶部的设置按钮打开「设置」。它控制的是**整站外观**，不只棋盘：
@@ -132,12 +155,14 @@ src/
 ├─ hooks/
 │  ├─ useAiEngine.ts    # Worker 请求封装
 │  ├─ useAppearance.ts  # 整站主题、棋子与棋盘覆盖注入、持久化
+│  ├─ useOnlineGame.ts  # 联机房间状态机：房主权威、同步、重连、再来一局
 │  ├─ usePuzzleProgress.ts # 残局进度与最佳步数持久化
 │  ├─ useTutorialProgress.ts # 教程完成进度持久化
 │  └─ useStats.ts       # 双人战绩持久化
 ├─ components/
 │  ├─ Board.tsx         # 围棋式网格棋盘、交叉点棋子、落子动画
 │  ├─ Menu.tsx          # 模式 / 人数 / 尺寸 / 难度 / 先手 / 外观入口 / 残局 / 教程
+│  ├─ OnlinePanel.tsx   # 联机建房、房间码、分享链接与连接状态
 │  ├─ Settings.tsx      # 整站主题、棋盘样式 / 背景、棋子颜色与图片设置面板
 │  ├─ Controls.tsx      # 悔棋 / 重开 / 提示 / 音效
 │  ├─ TutorialCoach.tsx # 教程步骤、提示与点错反馈
@@ -152,6 +177,12 @@ src/
 ├─ lib/
 │  ├─ pieceImage.ts     # 图片校验、居中裁切与压缩（棋子 / 棋盘）
 │  └─ sound.ts          # WebAudio 音效
+├─ net/
+│  ├─ protocol.ts       # 联机消息、房间码、局面校验与摘要
+│  ├─ protocol.test.ts  # 房间码、恶意局面、消息解码
+│  ├─ transport.ts      # 传输层接口
+│  ├─ trystero.ts       # WebRTC（nostr 公共信令）实现
+│  └─ local.ts          # 开发环境 BroadcastChannel 调试实现
 ├─ App.tsx
 ├─ main.tsx
 └─ styles.css

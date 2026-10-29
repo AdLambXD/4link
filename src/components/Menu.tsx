@@ -14,10 +14,12 @@ import {
   type PieceCustomization,
 } from '../pieces';
 import type { Skin } from '../skins';
+import { roomCodeFromUrl } from '../net/protocol';
 import { ArrowRightIcon, SettingsIcon } from './Icons';
+import { OnlinePanel, type OnlinePanelProps } from './OnlinePanel';
 
 export interface MatchConfig {
-  mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial';
+  mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial' | 'online';
   difficulty: Difficulty;
   humanFirst: boolean;
   players: number;
@@ -34,6 +36,7 @@ interface MenuProps {
   skin: Skin;
   pieces: PieceCustomization;
   board: BoardCustomization;
+  online: OnlinePanelProps;
   onOpenSettings: () => void;
   onStart: (config: MatchConfig) => void;
   onResetStats: () => void;
@@ -56,6 +59,7 @@ export function Menu({
   skin,
   pieces,
   board,
+  online,
   onOpenSettings,
   onStart,
   onResetStats,
@@ -65,7 +69,9 @@ export function Menu({
   const firstUnsolved = PUZZLES.find((puzzle) => !puzzleProgress[puzzle.id]?.solved) ?? PUZZLES[0];
   const firstUnsolvedTutorial =
     TUTORIALS.find((lesson) => !tutorialProgress[lesson.id]) ?? TUTORIALS[0];
-  const [mode, setMode] = useState<MatchConfig['mode']>(initial.mode);
+  const [mode, setMode] = useState<MatchConfig['mode']>(() =>
+    initial.mode === 'online' || roomCodeFromUrl(window.location.href) ? 'online' : initial.mode,
+  );
   const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty);
   const [humanFirst, setHumanFirst] = useState(initial.humanFirst);
   const [players, setPlayers] = useState(initial.players);
@@ -98,6 +104,7 @@ export function Menu({
   const num = () => String(++step).padStart(2, '0');
 
   const start = () => {
+    if (mode === 'online') return;
     onStart({
       mode,
       difficulty,
@@ -143,7 +150,7 @@ export function Menu({
           <span className="block-num">{num()}</span>
           <h2>对战模式</h2>
         </div>
-        <div className="choices choices-4">
+        <div className="choices choices-5">
           <button
             className={`choice choice-compact choice-mode${mode === 'pve' ? ' is-on' : ''}`}
             onClick={() => setMode('pve')}
@@ -157,6 +164,13 @@ export function Menu({
           >
             <span className="choice-main">本地多人</span>
             <span className="choice-note">LOCAL</span>
+          </button>
+          <button
+            className={`choice choice-compact choice-mode${mode === 'online' ? ' is-on' : ''}`}
+            onClick={() => setMode('online')}
+          >
+            <span className="choice-main">联机对战</span>
+            <span className="choice-note">ONLINE</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'puzzle' ? ' is-on' : ''}`}
@@ -174,6 +188,19 @@ export function Menu({
           </button>
         </div>
       </section>
+
+      {mode === 'online' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>联机房间</h2>
+            <span className="puzzle-head-meta">
+              <span className="puzzle-count">1v1 · P2P</span>
+            </span>
+          </div>
+          <OnlinePanel {...online} />
+        </section>
+      )}
 
       {mode === 'tutorial' && (
         <section className="block">
@@ -295,11 +322,11 @@ export function Menu({
         </section>
       )}
 
-      {(mode === 'pve' || mode === 'pvp') && (
+      {(mode === 'pve' || mode === 'pvp' || mode === 'online') && (
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
-            <h2>棋盘尺寸</h2>
+            <h2>{mode === 'online' ? '棋盘尺寸（房主选择）' : '棋盘尺寸'}</h2>
           </div>
           <div className="choices choices-4">
             {BOARD_SIZES.map((boardSize) => (
@@ -428,14 +455,45 @@ export function Menu({
         </button>
       </section>
 
-      <button className="start-btn" onClick={start}>
-        <span>
-          {mode === 'puzzle' ? '开始解谜' : mode === 'tutorial' ? '开始教程' : '开始对局'}
-        </span>
-        <ArrowRightIcon />
-      </button>
+      {mode !== 'online' && (
+        <button className="start-btn" onClick={start}>
+          <span>
+            {mode === 'puzzle' ? '开始解谜' : mode === 'tutorial' ? '开始教程' : '开始对局'}
+          </span>
+          <ArrowRightIcon />
+        </button>
+      )}
 
-      {mode === 'tutorial' ? (
+      {mode === 'online' ? (
+        <div className="scorecard">
+          <span className="scorecard-title">联机状态</span>
+          <span className="score-item">
+            <span
+              className={`online-dot${
+                online.phase === 'playing' || online.phase === 'waiting'
+                  ? ' is-on'
+                  : online.phase === 'connecting'
+                    ? ' is-busy'
+                    : ''
+              }`}
+            />
+            {online.phase === 'idle'
+              ? '未连接'
+              : online.phase === 'connecting'
+                ? '连接中'
+                : online.phase === 'waiting'
+                  ? '等待对手'
+                  : online.phase === 'playing'
+                    ? '对局中'
+                    : online.phase === 'left'
+                      ? '对手已离开'
+                      : '连接失败'}
+          </span>
+          <span className="score-draw">
+            {online.code ? `房间 ${online.code}` : '1v1 · WebRTC'}
+          </span>
+        </div>
+      ) : mode === 'tutorial' ? (
         <div className="scorecard">
           <span className="scorecard-title">教程进度</span>
           <span className="score-item">
@@ -492,6 +550,13 @@ export function Menu({
               <li>你固定执先手，AI 执后手；AI 会按最优防守尽量拖长战线。</li>
               <li>步数只计算你的落子；提示会指出当前可强制取胜的一手。</li>
               <li>解开的进度和最佳步数保存在本机。</li>
+            </>
+          ) : mode === 'online' ? (
+            <>
+              <li>创建房间的人是房主，执先手；对手输入同一房间码后自动开局。</li>
+              <li>棋步通过 WebRTC 在两台设备间直连，不经过服务器，也不需要登录。</li>
+              <li>联机为 1v1；房主选择的棋盘尺寸决定这一局。</li>
+              <li>断线后房间会保留，对手用同一房间码重新加入即可续局。</li>
             </>
           ) : (
             <>
