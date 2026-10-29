@@ -29,55 +29,123 @@ function noise(seed: number): number {
   return (value - Math.floor(value)) * 2 - 1;
 }
 
-/** 一条略带弧度的手绘线段。 */
-function roughSegment(
+interface Point {
+  x: number;
+  y: number;
+}
+
+function bezierPoint(
+  a: Point,
+  b: Point,
+  c: Point,
+  d: Point,
+  t: number,
+): Point {
+  const u = 1 - t;
+  const w0 = u * u * u;
+  const w1 = 3 * u * u * t;
+  const w2 = 3 * u * t * t;
+  const w3 = t * t * t;
+  return {
+    x: a.x * w0 + b.x * w1 + c.x * w2 + d.x * w3,
+    y: a.y * w0 + b.y * w1 + c.y * w2 + d.y * w3,
+  };
+}
+
+/**
+ * 手绘墨线：沿三次贝塞尔采样，用「压力」改变线宽，输出填充多边形。
+ *
+ * 每条线单独倾斜一点、整体轻微弯曲，行笔中段加粗、两端收锋，
+ * 再叠一点墨色不匀，模拟蘸墨画的格线。倾斜以线段中点为轴，
+ * 所以交叉点仍在原位附近；落子坐标与判定完全不受影响。
+ */
+function roughRibbon(
   x1: number,
   y1: number,
   x2: number,
   y2: number,
   seed: number,
+  width: number,
+  step: number,
 ): string {
-  const jitter = (n: number) => noise(seed + n) * 0.55;
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const c1x = x1 + dx * 0.33 + jitter(1);
-  const c1y = y1 + dy * 0.33 + jitter(2);
-  const c2x = x1 + dx * 0.67 + jitter(3);
-  const c2y = y1 + dy * 0.67 + jitter(4);
-  return `M ${x1 + jitter(0)} ${y1 + jitter(5)} C ${c1x} ${c1y} ${c2x} ${c2y} ${x2 + jitter(6)} ${y2 + jitter(7)}`;
+  const amp = step * 0.035;
+  const jitter = (n: number) => noise(seed + n) * amp;
+  const length = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const nx = -(y2 - y1) / length;
+  const ny = (x2 - x1) / length;
+
+  // 每条线有自己的倾斜量、平移量与弯度，格距因此不会完全均匀。
+  const tilt = noise(seed + 11.3) * step * 0.05;
+  const shift = noise(seed + 15.7) * step * 0.035;
+  const bow = noise(seed + 5.3) * amp * 1.4;
+
+  const start: Point = {
+    x: x1 + nx * (tilt + shift) + jitter(0.3),
+    y: y1 + ny * (tilt + shift) + jitter(1.7),
+  };
+  const end: Point = {
+    x: x2 + nx * (shift - tilt) + jitter(2.4),
+    y: y2 + ny * (shift - tilt) + jitter(3.9),
+  };
+  const c1: Point = {
+    x: x1 + (x2 - x1) / 3 + nx * (bow + shift) + jitter(6.2),
+    y: y1 + (y2 - y1) / 3 + ny * (bow + shift) + jitter(7.4),
+  };
+  const c2: Point = {
+    x: x1 + ((x2 - x1) * 2) / 3 + nx * (bow + shift) + jitter(8.1),
+    y: y1 + ((y2 - y1) * 2) / 3 + ny * (bow + shift) + jitter(9.6),
+  };
+
+  const samples = 8;
+  const left: string[] = [];
+  const right: string[] = [];
+  for (let i = 0; i <= samples; i += 1) {
+    const t = i / samples;
+    const point = bezierPoint(start, c1, c2, end, t);
+    const ahead = bezierPoint(start, c1, c2, end, Math.min(1, t + 0.02));
+    const dx = ahead.x - point.x;
+    const dy = ahead.y - point.y;
+    const d = Math.hypot(dx, dy) || 1;
+
+    // 起笔收锋、行笔加重，再叠一点墨色不匀。
+    const taper = 0.5 + 0.5 * Math.sin(Math.PI * t) ** 0.55;
+    const pressure =
+      taper * (0.78 + 0.5 * (0.5 + 0.5 * noise(seed + 20 + t * 6)));
+    const half = (width * pressure) / 2;
+    const ox = (-dy / d) * half;
+    const oy = (dx / d) * half;
+
+    left.push(`${(point.x + ox).toFixed(3)} ${(point.y + oy).toFixed(3)}`);
+    right.push(`${(point.x - ox).toFixed(3)} ${(point.y - oy).toFixed(3)}`);
+  }
+
+  return `M ${left.join(' L ')} L ${right.reverse().join(' L ')} Z`;
 }
 
-/** 外框：四个角与边中点都轻微偏移，像一笔画出来的方框。 */
-function roughRect(
-  left: number,
-  top: number,
-  right: number,
-  bottom: number,
+/** 方框的四条手绘边；两端略微出头，转角像真的笔画一样交叠。 */
+function roughFramePaths(
+  inset: number,
+  width: number,
+  step: number,
   seed: number,
-): string {
-  const jitter = (n: number) => noise(seed + n) * 0.5;
-  const corners: Array<[number, number]> = [
-    [left + jitter(0), top + jitter(1)],
-    [right + jitter(2), top + jitter(3)],
-    [right + jitter(4), bottom + jitter(5)],
-    [left + jitter(6), bottom + jitter(7)],
+  over = 0.42,
+): string[] {
+  const a = inset;
+  const b = 100 - inset;
+  return [
+    roughRibbon(a - over, a, b + over, a, seed, width, step),
+    roughRibbon(b, a - over, b, b + over, seed + 2, width, step),
+    roughRibbon(b + over, b, a - over, b, seed + 4, width, step),
+    roughRibbon(a, b + over, a, a - over, seed + 6, width, step),
   ];
-  const mids = corners.map(([x, y], i) => {
-    const [nx, ny] = corners[(i + 1) % corners.length];
-    return [
-      (x + nx) / 2 + jitter(10 + i * 2),
-      (y + ny) / 2 + jitter(11 + i * 2),
-    ];
-  });
-  return `M ${corners[0][0]} ${corners[0][1]} Q ${mids[0][0]} ${mids[0][1]} ${corners[1][0]} ${corners[1][1]} Q ${mids[1][0]} ${mids[1][1]} ${corners[2][0]} ${corners[2][1]} Q ${mids[2][0]} ${mids[2][1]} ${corners[3][0]} ${corners[3][1]} Q ${mids[3][0]} ${mids[3][1]} ${corners[0][0]} ${corners[0][1]} Z`;
 }
 
-/** 手绘小圆点，半径轻微不均。 */
+/** 手绘小圆点，半径与轮廓都不太规整。 */
 function roughDot(cx: number, cy: number, r: number, seed: number): string {
   const count = 10;
   const points = Array.from({ length: count }, (_, i) => {
     const angle = (i / count) * Math.PI * 2;
-    const radius = r * (1 + noise(seed + i) * 0.22);
+    const radius = r * (1 + noise(seed + i) * 0.3);
     return `${(cx + Math.cos(angle) * radius).toFixed(2)} ${(cy + Math.sin(angle) * radius).toFixed(2)}`;
   });
   return `M ${points.join(' L ')} Z`;
@@ -146,32 +214,60 @@ export function Board({
             aria-hidden="true"
           >
             {boardStyle === 'handdrawn' ? (
-              <g
-                fill="none"
-                stroke="var(--board-grid)"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path
-                  d={roughRect(edge, edge, far, far, 3.1)}
-                  strokeWidth={lineWidth * 1.9}
-                />
-                <path
-                  d={roughRect(edge + 0.16, edge + 0.1, far + 0.1, far + 0.16, 9.7)}
-                  strokeWidth={lineWidth * 0.55}
-                  opacity={0.5}
-                />
-                {Array.from({ length: cols }, (_, i) => {
+              <g fill="var(--board-grid)" stroke="none">
+                <g>
+                  {roughFramePaths(edge, lineWidth * 3.6, step, 3.1).map(
+                    (d, i) => (
+                      <path key={i} d={d} />
+                    ),
+                  )}
+                </g>
+                <g opacity={0.55}>
+                  {roughFramePaths(
+                    edge - 0.3,
+                    lineWidth * 1.2,
+                    step,
+                    9.7,
+                    0.22,
+                  ).map((d, i) => (
+                    <path key={i} d={d} />
+                  ))}
+                </g>
+                {Array.from({ length: cols - 2 }, (_, index) => {
+                  const i = index + 1;
                   const p = edge + i * step;
+                  const over = step * 0.045;
+                  const vWidth =
+                    lineWidth *
+                    (2.2 + 1.6 * (0.5 + 0.5 * noise(i * 3.3 + 0.7)));
+                  const hWidth =
+                    lineWidth *
+                    (2.2 + 1.6 * (0.5 + 0.5 * noise(i * 4.7 + 2.1)));
                   return (
                     <g key={i}>
                       <path
-                        d={roughSegment(p, edge, p, far, i * 13.7 + 1)}
-                        strokeWidth={lineWidth}
+                        d={roughRibbon(
+                          p,
+                          edge - over,
+                          p,
+                          far + over,
+                          i * 13.7 + 1,
+                          vWidth,
+                          step,
+                        )}
+                        opacity={0.8 + 0.2 * (0.5 + 0.5 * noise(i * 2.9 + 4))}
                       />
                       <path
-                        d={roughSegment(edge, p, far, p, i * 17.3 + 5)}
-                        strokeWidth={lineWidth}
+                        d={roughRibbon(
+                          edge - over,
+                          p,
+                          far + over,
+                          p,
+                          i * 17.3 + 5,
+                          hWidth,
+                          step,
+                        )}
+                        opacity={0.8 + 0.2 * (0.5 + 0.5 * noise(i * 5.1 + 8))}
                       />
                     </g>
                   );
@@ -187,7 +283,6 @@ export function Board({
                         r * 31 + c * 7 + 2,
                       )}
                       fill="var(--board-dot)"
-                      stroke="none"
                     />
                   )),
                 )}

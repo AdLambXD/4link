@@ -59,16 +59,15 @@ function BoardStylePreview({ style }: { style: BoardStyle }) {
     <span className="board-style-preview" aria-hidden="true">
       <svg viewBox="0 0 40 40" fill="none">
         {style === 'handdrawn' ? (
-          <g
-            stroke="var(--board-grid)"
-            strokeWidth="1.1"
-            strokeLinecap="round"
-          >
-            <path d="M7 6.6 Q20 7.4 33 6.8 L33.4 33 Q20 32.4 6.7 33.4 Z" />
-            <path d="M14 6.9 C14.3 15 13.7 25 14.2 33.1" />
-            <path d="M26 6.7 C25.7 15 26.4 24 25.9 33" />
-            <path d="M7.1 15 C15 14.6 25 15.2 33.2 14.8" />
-            <path d="M6.9 25 C15 25.4 25 24.7 33.1 25.2" />
+          <g stroke="var(--board-grid)" strokeLinecap="round" fill="none">
+            <path d="M6.4 6.3 L33.2 6.9" strokeWidth="2.1" />
+            <path d="M33.5 6.4 L33.1 33.5" strokeWidth="1.5" />
+            <path d="M33.3 33.7 L6.6 33.1" strokeWidth="1.9" />
+            <path d="M6.2 33.4 L6.5 6.2" strokeWidth="1.4" />
+            <path d="M14.2 6.6 C13.8 15 14.5 25 14 33.4" strokeWidth="1.8" />
+            <path d="M26.1 6.4 C26.6 15 25.7 24 26.3 33.2" strokeWidth="1.2" />
+            <path d="M6.3 14.4 C14 15 25 14.2 33.5 14.9" strokeWidth="1.5" />
+            <path d="M6.7 25.3 C14 24.6 25 25.5 33.3 24.7" strokeWidth="2" />
           </g>
         ) : (
           <g stroke="var(--board-grid)" strokeWidth="1">
