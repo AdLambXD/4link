@@ -310,6 +310,19 @@ button {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+/* 对战模式：第一行 2 项，第二行 3 项。 */
+.mode-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.mode-grid .choice-mode {
+  grid-column: span 2;
+}
+
+.mode-grid .choice-mode:nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
 .choice-compact {
   padding: 10px 9px 9px;
 }

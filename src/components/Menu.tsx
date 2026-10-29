@@ -150,7 +150,7 @@ export function Menu({
           <span className="block-num">{num()}</span>
           <h2>对战模式</h2>
         </div>
-        <div className="choices choices-5">
+        <div className="choices mode-grid">
           <button
             className={`choice choice-compact choice-mode${mode === 'pve' ? ' is-on' : ''}`}
             onClick={() => setMode('pve')}
@@ -162,15 +162,15 @@ export function Menu({
             className={`choice choice-compact choice-mode${mode === 'pvp' ? ' is-on' : ''}`}
             onClick={() => setMode('pvp')}
           >
-            <span className="choice-main">本地多人</span>
+            <span className="choice-main">本地对战</span>
             <span className="choice-note">LOCAL</span>
           </button>
           <button
-            className={`choice choice-compact choice-mode${mode === 'online' ? ' is-on' : ''}`}
-            onClick={() => setMode('online')}
+            className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
+            onClick={() => setMode('tutorial')}
           >
-            <span className="choice-main">联机对战</span>
-            <span className="choice-note">ONLINE</span>
+            <span className="choice-main">新手教程</span>
+            <span className="choice-note">GUIDE</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'puzzle' ? ' is-on' : ''}`}
@@ -180,11 +180,11 @@ export function Menu({
             <span className="choice-note">PUZZLE</span>
           </button>
           <button
-            className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
-            onClick={() => setMode('tutorial')}
+            className={`choice choice-compact choice-mode${mode === 'online' ? ' is-on' : ''}`}
+            onClick={() => setMode('online')}
           >
-            <span className="choice-main">新手教程</span>
-            <span className="choice-note">GUIDE</span>
+            <span className="choice-main">联机对战</span>
+            <span className="choice-note">ONLINE</span>
           </button>
         </div>
       </section>
