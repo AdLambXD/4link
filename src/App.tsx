@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { DIFFICULTY_LABELS } from './ai/engine';
+import type { Difficulty } from './ai/engine';
 import { Board } from './components/Board';
 import { Controls } from './components/Controls';
 import { ArrowLeftIcon, SettingsIcon } from './components/Icons';
@@ -36,9 +36,16 @@ import { useAppearance } from './hooks/useAppearance';
 import { usePuzzleProgress } from './hooks/usePuzzleProgress';
 import { useStats } from './hooks/useStats';
 import { useTutorialProgress } from './hooks/useTutorialProgress';
+import { useI18n, type StringKey } from './i18n';
 import { playDrop, playWin } from './lib/sound';
 
 type Screen = 'menu' | 'game';
+
+const DIFFICULTY_KEYS: Record<Difficulty, StringKey> = {
+  easy: 'difficulty.easy',
+  normal: 'difficulty.normal',
+  hard: 'difficulty.hard',
+};
 
 const DEFAULT_CONFIG: MatchConfig = {
   mode: 'pve',
@@ -60,6 +67,7 @@ function emptySeries(players: number): Series {
 }
 
 export default function App() {
+  const { t, tp, text } = useI18n();
   const [screen, setScreen] = useState<Screen>('menu');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [match, setMatch] = useState<MatchConfig>(DEFAULT_CONFIG);
@@ -75,10 +83,10 @@ export default function App() {
   const [puzzleSolved, setPuzzleSolved] = useState(false);
   const [puzzleHints, setPuzzleHints] = useState(0);
   const [puzzleExhausted, setPuzzleExhausted] = useState(false);
-  const [puzzleNotice, setPuzzleNotice] = useState<string | null>(null);
+  const [puzzleNoWin, setPuzzleNoWin] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
   const [tutorialReply, setTutorialReply] = useState<number | null>(null);
-  const [tutorialFeedback, setTutorialFeedback] = useState<string | null>(null);
+  const [tutorialFeedback, setTutorialFeedback] = useState<number | null>(null);
 
   const requestMove = useAiEngine();
   const {
@@ -359,7 +367,7 @@ export default function App() {
     setPuzzleSolved(false);
     setPuzzleHints(0);
     setPuzzleExhausted(false);
-    setPuzzleNotice(null);
+    setPuzzleNoWin(false);
     setTutorialStep(0);
     setTutorialReply(null);
     setTutorialFeedback(null);
@@ -378,7 +386,7 @@ export default function App() {
         const step = tutorial.steps[tutorialStep];
         if (!step) return;
         if (col !== step.expect) {
-          setTutorialFeedback(`这一手试试 ${colLabel(step.expect)} 列。`);
+          setTutorialFeedback(step.expect);
           return;
         }
         setTutorialFeedback(null);
@@ -394,7 +402,7 @@ export default function App() {
         return;
       }
 
-      setPuzzleNotice(null);
+      setPuzzleNoWin(false);
       dispatch({ type: 'play', col });
     },
     [
@@ -414,7 +422,7 @@ export default function App() {
     if (thinking || puzzleExhausted || match.mode === 'tutorial') return;
     if (state.status !== 'playing') return;
     const steps = match.mode === 'pve' || match.mode === 'puzzle' ? 2 : 1;
-    setPuzzleNotice(null);
+    setPuzzleNoWin(false);
     dispatch({ type: 'undo', steps });
   }, [thinking, state.status, match.mode, puzzleExhausted]);
 
@@ -438,7 +446,7 @@ export default function App() {
     setPuzzleSolved(false);
     setPuzzleHints(0);
     setPuzzleExhausted(false);
-    setPuzzleNotice(null);
+    setPuzzleNoWin(false);
     setTutorialStep(0);
     setTutorialReply(null);
     setTutorialFeedback(null);
@@ -469,7 +477,7 @@ export default function App() {
 
     if (match.mode === 'puzzle') {
       if (!puzzle || state.turn !== puzzle.human || remainingMoves <= 0) return;
-      setPuzzleNotice(null);
+      setPuzzleNoWin(false);
       setHintLoading(true);
       try {
         const result = findBestMove(state, remainingMoves * 2 - 1);
@@ -478,7 +486,7 @@ export default function App() {
           setPuzzleHints((count) => count + 1);
         } else {
           setHint(null);
-          setPuzzleNotice('当前局面已无法在限定步数内取胜，重开或按 R。');
+          setPuzzleNoWin(true);
         }
       } finally {
         setHintLoading(false);
@@ -585,33 +593,62 @@ export default function App() {
   }
 
   const turnLabel = (() => {
-    if (puzzleExhausted) return '步数用尽';
-    if (tutorialComplete) return '教程完成';
-    if (tutorial) return thinking ? '对手回应中…' : '你的回合';
-    if (state.status === 'draw') return '和棋';
+    if (puzzleExhausted) return t('game.turn.movesUsed');
+    if (tutorialComplete) return t('game.turn.tutorialDone');
+    if (tutorial)
+      return thinking
+        ? t('game.turn.opponentResponding')
+        : t('game.turn.yours');
+    if (state.status === 'draw') return t('game.turn.draw');
     if (state.status === 'won') {
-      if (puzzle) return state.winner === puzzle.human ? '解开了' : '防守成功';
-      return '对局结束';
+      if (puzzle)
+        return state.winner === puzzle.human
+          ? t('game.turn.solved')
+          : t('game.turn.defended');
+      return t('game.turn.over');
     }
     if (match.mode === 'puzzle') {
-      if (thinking) return 'AI 防守中…';
-      return state.turn === 1 ? '你的回合' : 'AI 回合';
+      if (thinking) return t('game.turn.aiDefending');
+      return state.turn === 1
+        ? t('game.turn.yours')
+        : t('game.turn.aiTurn');
     }
     if (match.mode === 'pve') {
-      if (thinking) return 'AI 思考中…';
-      return state.turn === aiPlayer ? 'AI 回合' : '你的回合';
+      if (thinking) return t('game.turn.aiThinking');
+      return state.turn === aiPlayer
+        ? t('game.turn.aiTurn')
+        : t('game.turn.yours');
     }
-    if (game.players === 2) return state.turn === 1 ? '先手回合' : '后手回合';
-    return `玩家 ${state.turn} 回合`;
+    if (game.players === 2)
+      return state.turn === 1
+        ? t('game.turn.first')
+        : t('game.turn.second');
+    return t('game.turn.player', { player: state.turn });
   })();
 
   const modeLabel = tutorial
-    ? `教程 · NO.${String(tutorial.no).padStart(2, '0')} · ${game.cols}×${game.rows}`
+    ? t('game.mode.tutorial', {
+        no: String(tutorial.no).padStart(2, '0'),
+        cols: game.cols,
+        rows: game.rows,
+      })
     : puzzle
-      ? `残局 · NO.${String(puzzle.no).padStart(2, '0')} · ${game.cols}×${game.rows}`
+      ? t('game.mode.puzzle', {
+          no: String(puzzle.no).padStart(2, '0'),
+          cols: game.cols,
+          rows: game.rows,
+        })
       : match.mode === 'pve'
-        ? `人机 · ${DIFFICULTY_LABELS[match.difficulty]} · ${game.cols}×${game.rows}`
-        : `本地 · ${game.players} 人 · ${game.cols}×${game.rows}`;
+        ? t('game.mode.pve', {
+            difficulty: t(DIFFICULTY_KEYS[match.difficulty]),
+            cols: game.cols,
+            rows: game.rows,
+          })
+        : t('game.mode.pvp', {
+            players: t('menu.playerCount', { count: game.players }),
+            cols: game.cols,
+            rows: game.rows,
+          });
 
   const canHint =
     match.mode === 'tutorial'
@@ -664,7 +701,7 @@ export default function App() {
             <button
               className="back-btn"
               onClick={() => setScreen('menu')}
-              aria-label="返回菜单"
+              aria-label={t('game.backAria')}
             >
               <ArrowLeftIcon />
             </button>
@@ -678,7 +715,7 @@ export default function App() {
               type="button"
               className="settings-trigger head-settings"
               onClick={openSettings}
-              aria-label="打开设置"
+              aria-label={t('game.settingsAria')}
             >
               <SettingsIcon size={15} />
             </button>
@@ -691,25 +728,45 @@ export default function App() {
             </div>
 
             {tutorial ? (
-              <div className="score-inline puzzle-limits" title="教程进度">
+              <div
+                className="score-inline puzzle-limits"
+                title={t('game.aria.tutorialProgress')}
+              >
                 <span>
-                  课程 {tutorial.no} / {TUTORIALS.length}
+                  {t('game.lesson', {
+                    no: tutorial.no,
+                    total: TUTORIALS.length,
+                  })}
                 </span>
                 <span className="score-draws">
                   {tutorialComplete
-                    ? '完成'
-                    : `步骤 ${Math.min(tutorialStep + 1, tutorial.steps.length)} / ${tutorial.steps.length}`}
+                    ? t('game.complete')
+                    : t('game.step', {
+                        current: Math.min(
+                          tutorialStep + 1,
+                          tutorial.steps.length,
+                        ),
+                        total: tutorial.steps.length,
+                      })}
                 </span>
               </div>
             ) : puzzle ? (
-              <div className="score-inline puzzle-limits" title="限定步数">
-                <span>限 {puzzle.moveLimit} 步</span>
+              <div
+                className="score-inline puzzle-limits"
+                title={t('game.aria.moveLimit')}
+              >
+                <span>
+                  {tp('game.limitMoves', puzzle.moveLimit)}
+                </span>
                 <span className="score-draws">
-                  已用 {usedMoves} / {puzzle.moveLimit}
+                  {t('game.usedMoves', {
+                    used: usedMoves,
+                    limit: puzzle.moveLimit,
+                  })}
                 </span>
               </div>
             ) : (
-              <div className="score-inline" title="本场胜局">
+              <div className="score-inline" title={t('game.aria.series')}>
                 {series.wins.map((wins, i) => (
                   <span className="score-item" key={i}>
                     <i className={`chip chip-p${i + 1}`} />
@@ -717,7 +774,9 @@ export default function App() {
                   </span>
                 ))}
                 {series.draws > 0 && (
-                  <span className="score-draws">和 {series.draws}</span>
+                  <span className="score-draws">
+                    {t('game.draws', { count: series.draws })}
+                  </span>
                 )}
               </div>
             )}
@@ -729,7 +788,13 @@ export default function App() {
             lesson={tutorial}
             stepIndex={tutorialStep}
             thinking={thinking}
-            feedback={tutorialFeedback}
+            feedback={
+              tutorialFeedback === null
+                ? null
+                : t('game.tutorialWrongColumn', {
+                    col: colLabel(tutorialFeedback),
+                  })
+            }
             complete={tutorialComplete}
           />
         )}
@@ -742,23 +807,26 @@ export default function App() {
             onPlay={play}
             title={
               tutorial
-                ? `新手教程 · ${tutorial.title}`
+                ? t('board.tutorialTitle', { title: text(tutorial.title) })
                 : puzzle
-                  ? `残局 · ${puzzle.title}`
+                  ? t('board.puzzleTitle', { title: text(puzzle.title) })
                   : undefined
             }
             meta={
               tutorial
-                ? `${tutorial.size} × ${tutorial.size} · 教程`
+                ? t('board.tutorialMeta', { size: tutorial.size })
                 : puzzle
-                  ? `${puzzle.size} × ${puzzle.size} · 限 ${puzzle.moveLimit} 步`
+                  ? t('board.puzzleMeta', {
+                      size: puzzle.size,
+                      limit: tp('game.limitMoves', puzzle.moveLimit),
+                    })
                   : undefined
             }
             footer={
               tutorial
-                ? 'TUTORIAL · 跟着提示点击列'
+                ? t('board.tutorialFooter')
                 : puzzle
-                  ? `PUZZLE · 你执先手 · ${puzzle.moveLimit} 步内取胜`
+                  ? t('board.puzzleFooter')
                   : undefined
             }
             boardStyle={board.style}
@@ -799,7 +867,9 @@ export default function App() {
           )}
         </div>
 
-        {puzzleNotice && <p className="puzzle-notice">{puzzleNotice}</p>}
+        {puzzleNoWin && (
+          <p className="puzzle-notice">{t('game.puzzleNoWin')}</p>
+        )}
 
         <Controls
           onUndo={undo}

@@ -10,6 +10,7 @@
  * `.` 空，`X` / `1` 先手，`O` / `2` 后手。棋子必须遵守重力。
  */
 
+import { lt, type LocalizedText } from '../i18n';
 import {
   drop,
   legalMoves,
@@ -24,8 +25,8 @@ import {
 export interface Puzzle {
   readonly id: string;
   readonly no: number;
-  readonly title: string;
-  readonly note: string;
+  readonly title: LocalizedText;
+  readonly note: LocalizedText;
   readonly size: BoardSize;
   /** 允许玩家行动的步数（只数玩家的落子） */
   readonly moveLimit: number;
@@ -281,8 +282,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'first-link',
     no: 1,
-    title: '底行缺口',
-    note: '对手的竖三已经听牌，你只有一手。',
+    title: lt('底行缺口', '底行缺口', 'Bottom-row gap'),
+    note: lt('对手的竖三已经听牌，你只有一手。', '對手的直三已經聽牌，你只有一手。', 'The opponent has three in a column and needs one more move. You only get one.'),
     size: 6,
     moveLimit: 1,
     human: 1,
@@ -299,8 +300,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'double-threat',
     no: 2,
-    title: '双威胁',
-    note: '一手落下，两个胜点。',
+    title: lt('双威胁', '雙威脅', 'Double threat'),
+    note: lt('一手落下，两个胜点。', '一手落下，兩個勝點。', 'One move, two winning points.'),
     size: 6,
     moveLimit: 2,
     human: 1,
@@ -317,8 +318,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'diagonal',
     no: 3,
-    title: '斜线缺口',
-    note: '斜线穿过三列，缺口在最边上。',
+    title: lt('斜线缺口', '斜線缺口', 'Diagonal gap'),
+    note: lt('斜线穿过三列，缺口在最边上。', '斜線穿過三欄，缺口在最邊上。', 'The diagonal crosses three columns, with the gap at the edge.'),
     size: 6,
     moveLimit: 2,
     human: 1,
@@ -335,8 +336,12 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'stack',
     no: 4,
-    title: '叠子上爬',
-    note: '对手的棋子也是你的台阶。',
+    title: lt('叠子上爬', '疊子往上爬', 'Climb the stack'),
+    note: lt(
+      '对手的棋子也是你的台阶。',
+      '對手的棋子也是你的階梯。',
+      "The opponent's stones are your stepping stones.",
+    ),
     size: 6,
     moveLimit: 3,
     human: 1,
@@ -353,8 +358,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'edge',
     no: 5,
-    title: '边线陷阱',
-    note: '最边上的一列，也能做杀。',
+    title: lt('边线陷阱', '邊線陷阱', 'Edge trap'),
+    note: lt('最边上的一列，也能做杀。', '最邊上的一欄，也能做殺。', 'Even the outermost column can set up a mate.'),
     size: 6,
     moveLimit: 3,
     human: 1,
@@ -371,8 +376,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'finale',
     no: 6,
-    title: '终局算术',
-    note: '先手、次序、缺口，一个都不能错。',
+    title: lt('终局算术', '終局算術', 'Endgame arithmetic'),
+    note: lt('先手、次序、缺口，一个都不能错。', '先手、次序、缺口，一個都不能錯。', 'First move, move order, and the gap: everything has to be exact.'),
     size: 6,
     moveLimit: 3,
     human: 1,
@@ -389,8 +394,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'eight-diagonal',
     no: 7,
-    title: '八路斜线',
-    note: '先填井，斜线才会出现。',
+    title: lt('八路斜线', '八路斜線', 'Diagonal on eight'),
+    note: lt('先填井，斜线才会出现。', '先填井，斜線才會出現。', 'Fill the well first; then the diagonal appears.'),
     size: 8,
     moveLimit: 2,
     human: 1,
@@ -409,8 +414,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'double-line',
     no: 8,
-    title: '双线听牌',
-    note: 'D 列一手落下，竖向与横向同时听牌。',
+    title: lt('双线听牌', '雙線聽牌', 'Two lines ready'),
+    note: lt('D 列一手落下，竖向与横向同时听牌。', 'D 欄一手落下，縱向與橫向同時聽牌。', 'One drop in column D sets up both a vertical and a horizontal line.'),
     size: 6,
     moveLimit: 2,
     human: 1,
@@ -427,8 +432,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'one-move-two-ways',
     no: 9,
-    title: '一子两用',
-    note: '对手下一手落 C 就能横四；唯一能同时挡住并连成斜线的点。',
+    title: lt('一子两用', '一子兩用', 'One stone, two jobs'),
+    note: lt('对手下一手落 C 就能横四；唯一能同时挡住并连成斜线的点。', '對手下一手落 C 就能橫四；唯一能同時擋住並連成斜線的點。', 'The opponent wins horizontally with C next. This is the only point that blocks it and completes your diagonal.'),
     size: 6,
     moveLimit: 2,
     human: 1,
@@ -445,8 +450,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'block-then-link',
     no: 10,
-    title: '先封后杀',
-    note: '先挡住对手的斜线，再用三手把横四补满。',
+    title: lt('先封后杀', '先封後殺', 'Block, then mate'),
+    note: lt('先挡住对手的斜线，再用三手把横四补满。', '先擋住對手的斜線，再用三手把橫四補滿。', 'Block the diagonal first, then complete your horizontal four in three moves.'),
     size: 6,
     moveLimit: 3,
     human: 1,
@@ -463,8 +468,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'eight-vertical',
     no: 11,
-    title: '八路竖井',
-    note: '中列补一手，竖四和 G–D 斜线同时听牌。',
+    title: lt('八路竖井', '八路豎井', 'Vertical well on eight'),
+    note: lt('中列补一手，竖四和 G–D 斜线同时听牌。', '中欄補一手，豎四和 G–D 斜線同時聽牌。', 'One move in the middle column sets up a vertical four and a G–D diagonal.'),
     size: 8,
     moveLimit: 2,
     human: 1,
@@ -483,8 +488,8 @@ export const PUZZLES: readonly Puzzle[] = [
   {
     id: 'eight-finish',
     no: 12,
-    title: '斜线反杀',
-    note: '对手在 H 列听牌；先封 H，再用三手反杀斜线。',
+    title: lt('斜线反杀', '斜線反殺', 'Diagonal counterattack'),
+    note: lt('对手在 H 列听牌；先封 H，再用三手反杀斜线。', '對手在 H 欄聽牌；先封 H，再用三手反殺斜線。', 'The opponent is ready in column H. Block H, then finish the diagonal in three moves.'),
     size: 8,
     moveLimit: 3,
     human: 1,

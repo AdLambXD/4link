@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { BoardStyle } from '../board';
 import { colLabel, idx, type GameState } from '../game/rules';
+import { useI18n } from '../i18n';
 
 interface BoardProps {
   state: GameState;
@@ -156,14 +157,17 @@ export function Board({
   disabled,
   hint,
   onPlay,
-  title = '四连引力',
+  title,
   meta,
   footer,
   boardStyle = 'clean',
 }: BoardProps) {
+  const { t } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
 
   const { cols, rows, win, players } = state.config;
+  const boardTitle = title ?? t('board.defaultTitle');
+  const boardMeta = meta ?? t('board.defaultMeta', { cols, rows, win });
   const rowOrder = Array.from({ length: rows }, (_, i) => rows - 1 - i);
   const playing = state.status === 'playing' && !disabled;
   const landingRow =
@@ -179,8 +183,8 @@ export function Board({
   return (
     <div className="board-frame">
       <div className="board-meta">
-        <span className="board-title">{title}</span>
-        <span>{meta ?? `${cols} × ${rows} · ${win} 连`}</span>
+        <span className="board-title">{boardTitle}</span>
+        <span>{boardMeta}</span>
       </div>
 
       <div className="board-grid">
@@ -362,11 +366,16 @@ export function Board({
                   className={`point${hover === c && playing ? ' hover' : ''}${
                     isWin ? ' win' : ''
                   }`}
-                  aria-label={`${colLabel(c)} 列第 ${r + 1} 行${
-                    value
-                      ? `，${value === 1 ? '先手' : value === 2 ? '后手' : `${value} 号`}棋子`
-                      : '，空'
-                  }`}
+                  aria-label={t(
+                    value === 0
+                      ? 'board.pointEmpty'
+                      : value === 1
+                        ? 'board.pointFirst'
+                        : value === 2
+                          ? 'board.pointSecond'
+                          : 'board.pointPlayer',
+                    { col: colLabel(c), row: r + 1, player: value },
+                  )}
                   disabled={!playing || full}
                   onClick={() => onPlay(c)}
                   onMouseEnter={() => setHover(c)}

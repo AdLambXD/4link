@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pickText } from '../i18n';
 import { drop } from './rules';
 import {
   PUZZLES,
@@ -18,7 +19,7 @@ describe('残局谜题', () => {
   });
 
   for (const puzzle of PUZZLES) {
-    it(`#${puzzle.no}「${puzzle.title}」是合法的 ${puzzle.moveLimit} 步杀`, () => {
+    it(`#${puzzle.no}「${pickText(puzzle.title, 'zh-CN')}」是合法的 ${puzzle.moveLimit} 步杀`, () => {
       const { state, result, mateIn, legal } = inspectPuzzle(puzzle);
 
       // 当前 UI 固定玩家执先手；新增关卡若违反这个前提，必须同步改 App。

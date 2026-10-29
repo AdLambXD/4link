@@ -16,12 +16,6 @@ import {
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
-export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-  easy: '简单',
-  normal: '普通',
-  hard: '困难',
-};
-
 export interface MoveResult {
   col: number;
   score: number;

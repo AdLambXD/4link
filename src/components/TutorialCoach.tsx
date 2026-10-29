@@ -1,4 +1,5 @@
 import type { TutorialLesson } from '../game/tutorial';
+import { useI18n } from '../i18n';
 
 interface TutorialCoachProps {
   lesson: TutorialLesson;
@@ -15,13 +16,14 @@ export function TutorialCoach({
   feedback,
   complete,
 }: TutorialCoachProps) {
+  const { t, text } = useI18n();
   const total = lesson.steps.length;
   const current = Math.min(stepIndex + 1, total);
   const prompt = complete
-    ? lesson.done
+    ? text(lesson.done)
     : thinking
-      ? '对手回应中…'
-      : (lesson.steps[stepIndex]?.prompt ?? lesson.done);
+      ? t('coach.responding')
+      : text(lesson.steps[stepIndex]?.prompt ?? lesson.done);
 
   return (
     <section
@@ -30,16 +32,20 @@ export function TutorialCoach({
     >
       <div className="tutorial-coach-head">
         <span className="tutorial-coach-no">
-          TUTORIAL NO.{String(lesson.no).padStart(2, '0')}
+          {t('tutorial.head', {
+            no: String(lesson.no).padStart(2, '0'),
+          })}
         </span>
         <span className="tutorial-progress-text">
-          {complete ? '完成' : `步骤 ${current} / ${total}`}
+          {complete
+            ? t('coach.complete')
+            : t('coach.steps', { current, total })}
         </span>
       </div>
 
       <div className="tutorial-coach-body">
         <div className="tutorial-coach-copy">
-          <h2>{lesson.title}</h2>
+          <h2>{text(lesson.title)}</h2>
           <p>{prompt}</p>
         </div>
         <div className="tutorial-dots" aria-hidden="true">
@@ -63,7 +69,7 @@ export function TutorialCoach({
           {feedback}
         </p>
       ) : (
-        !complete && <p className="tutorial-tip">{lesson.tip}</p>
+        !complete && <p className="tutorial-tip">{text(lesson.tip)}</p>
       )}
     </section>
   );

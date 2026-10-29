@@ -6,6 +6,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { CloseIcon } from './Icons';
+import { LanguageSwitch } from './LanguageSwitch';
 import {
   BOARD_STYLES,
   hasBoardCustomization,
@@ -20,7 +21,13 @@ import {
   type PieceCustomization,
   type PlayerNumber,
 } from '../pieces';
-import { boardImageFileToDataUrl, imageFileToDataUrl } from '../lib/pieceImage';
+import { useI18n, type StringKey } from '../i18n';
+import {
+  ImageError,
+  boardImageFileToDataUrl,
+  imageFileToDataUrl,
+  type ImageErrorCode,
+} from '../lib/pieceImage';
 import { SKINS, type Skin, type SkinId } from '../skins';
 
 interface SettingsProps {
@@ -39,18 +46,30 @@ interface SettingsProps {
   onClose: () => void;
 }
 
-const PLAYER_ROLES: Record<PlayerNumber, string> = {
-  1: '先手',
-  2: '后手',
-  3: '玩家 3',
-  4: '玩家 4',
-  5: '玩家 5',
-  6: '玩家 6',
+const PLAYER_ROLE_KEYS: Record<PlayerNumber, StringKey> = {
+  1: 'settings.role.first',
+  2: 'settings.role.second',
+  3: 'settings.role.player',
+  4: 'settings.role.player',
+  5: 'settings.role.player',
+  6: 'settings.role.player',
 };
 
-const BOARD_STYLE_META: Record<BoardStyle, { name: string; note: string }> = {
-  clean: { name: '规整', note: 'CLEAN' },
-  handdrawn: { name: '手绘', note: 'SKETCH' },
+const BOARD_STYLE_META: Record<
+  BoardStyle,
+  { nameKey: StringKey; note: string }
+> = {
+  clean: { nameKey: 'settings.boardStyle.clean', note: 'CLEAN' },
+  handdrawn: { nameKey: 'settings.boardStyle.handdrawn', note: 'SKETCH' },
+};
+
+const IMAGE_ERROR_KEYS: Record<ImageErrorCode, StringKey> = {
+  'not-image': 'errors.image.notImage',
+  'too-large': 'errors.image.tooLarge',
+  unreadable: 'errors.image.unreadable',
+  'invalid-size': 'errors.image.invalidSize',
+  unsupported: 'errors.image.unsupported',
+  'too-complex': 'errors.image.tooComplex',
 };
 
 /** 设置面板里的格线小样；手绘版用略带弧度的路径。 */
@@ -107,11 +126,17 @@ export function Settings({
   onResetBoard,
   onClose,
 }: SettingsProps) {
+  const { t, text } = useI18n();
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [busyPlayer, setBusyPlayer] = useState<PlayerNumber | null>(null);
   const [boardBusy, setBoardBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+
+  const imageErrorMessage = (value: unknown) =>
+    value instanceof ImageError
+      ? t(IMAGE_ERROR_KEYS[value.code], value.params)
+      : t('settings.errorFallback');
 
   useEffect(() => {
     const previousFocus = document.activeElement;
@@ -167,9 +192,7 @@ export function Settings({
       const dataUrl = await imageFileToDataUrl(file);
       onPieceImageChange(player, dataUrl);
     } catch (uploadError) {
-      setError(
-        uploadError instanceof Error ? uploadError.message : '图片处理失败，请重试',
-      );
+      setError(uploadError);
     } finally {
       setBusyPlayer(null);
     }
@@ -186,9 +209,7 @@ export function Settings({
       const dataUrl = await boardImageFileToDataUrl(file);
       onBoardImageChange(dataUrl);
     } catch (uploadError) {
-      setError(
-        uploadError instanceof Error ? uploadError.message : '图片处理失败，请重试',
-      );
+      setError(uploadError);
     } finally {
       setBoardBusy(false);
     }
@@ -215,25 +236,42 @@ export function Settings({
         <header className="settings-head">
           <div>
             <span className="kicker">APPEARANCE</span>
-            <h2 id="settings-title">设置</h2>
-            <p>整站主题、棋盘与棋子外观，修改会立即应用。</p>
+            <h2 id="settings-title">{t('settings.title')}</h2>
+            <p>{t('settings.subtitle')}</p>
           </div>
           <button
             ref={closeRef}
             type="button"
             className="settings-close"
             onClick={onClose}
-            aria-label="关闭设置"
+            aria-label={t('common.closeSettings')}
           >
             <CloseIcon />
           </button>
         </header>
 
-        <section className="settings-section" aria-labelledby="theme-heading">
+        <section
+          className="settings-section"
+          aria-labelledby="language-heading"
+        >
           <div className="settings-section-head">
             <span className="settings-num">01</span>
-            <h3 id="theme-heading">整站主题</h3>
-            <span className="settings-section-note">颜色 / 纸张 / 棋盘</span>
+            <h3 id="language-heading">{t('settings.languageHeading')}</h3>
+            <span className="settings-section-note">
+              {t('settings.languageNote')}
+            </span>
+          </div>
+          <p className="settings-hint">{t('settings.languageHint')}</p>
+          <LanguageSwitch variant="full" />
+        </section>
+
+        <section className="settings-section" aria-labelledby="theme-heading">
+          <div className="settings-section-head">
+            <span className="settings-num">02</span>
+            <h3 id="theme-heading">{t('settings.themeHeading')}</h3>
+            <span className="settings-section-note">
+              {t('settings.themeNote')}
+            </span>
           </div>
 
           <div className="theme-grid">
@@ -278,9 +316,14 @@ export function Settings({
                     </span>
                   </span>
                   <span className="theme-copy">
-                    <span className="theme-name">{option.name}</span>
+                    <span className="theme-name">{text(option.name)}</span>
                     <span className="theme-note">
-                      {option.note} · {option.scheme === 'dark' ? '暗色' : '亮色'}
+                      {option.note} ·{' '}
+                      {t(
+                        option.scheme === 'dark'
+                          ? 'settings.scheme.dark'
+                          : 'settings.scheme.light',
+                      )}
                     </span>
                   </span>
                   <span className="theme-check" aria-hidden="true">
@@ -294,13 +337,13 @@ export function Settings({
 
         <section className="settings-section" aria-labelledby="pieces-heading">
           <div className="settings-section-head">
-            <span className="settings-num">02</span>
-            <h3 id="pieces-heading">棋子</h3>
-            <span className="settings-section-note">颜色 / 图片</span>
+            <span className="settings-num">03</span>
+            <h3 id="pieces-heading">{t('settings.piecesHeading')}</h3>
+            <span className="settings-section-note">
+              {t('settings.piecesNote')}
+            </span>
           </div>
-          <p className="settings-hint">
-            未自定义的颜色会跟随主题；图片会被裁成圆形，保存在本机。
-          </p>
+          <p className="settings-hint">{t('settings.piecesHint')}</p>
 
           <div className="piece-list">
             {PLAYER_NUMBERS.map((player) => {
@@ -321,18 +364,22 @@ export function Settings({
 
                   <span className="piece-identity">
                     <span className="piece-label">P{player}</span>
-                    <span className="piece-role">{PLAYER_ROLES[player]}</span>
+                    <span className="piece-role">
+                      {player <= 2
+                        ? t(PLAYER_ROLE_KEYS[player])
+                        : t('settings.role.player', { player })}
+                    </span>
                   </span>
 
                   <label className="piece-color">
-                    <span>颜色</span>
+                    <span>{t('settings.color')}</span>
                     <input
                       type="color"
                       value={color}
                       onChange={(event) =>
                         onPieceColorChange(player, event.target.value)
                       }
-                      aria-label={`玩家 ${player} 棋子颜色`}
+                      aria-label={t('settings.pieceColorAria', { player })}
                     />
                     <code>{color.toUpperCase()}</code>
                   </label>
@@ -343,10 +390,12 @@ export function Settings({
                       className="text-btn piece-follow"
                       onClick={() => onPieceColorChange(player, null)}
                     >
-                      跟随主题
+                      {t('common.followTheme')}
                     </button>
                   ) : (
-                    <span className="piece-follow-note">主题色</span>
+                    <span className="piece-follow-note">
+                      {t('common.themeColor')}
+                    </span>
                   )}
 
                   <span className="piece-image-actions">
@@ -359,7 +408,11 @@ export function Settings({
                         onChange={(event) => void handleUpload(player, event)}
                         disabled={disabled}
                       />
-                      {busy ? '处理中…' : image ? '更换图片' : '上传图片'}
+                      {busy
+                        ? t('common.processing')
+                        : image
+                          ? t('settings.image.change')
+                          : t('settings.image.upload')}
                     </label>
                     {customImage && (
                       <button
@@ -367,7 +420,7 @@ export function Settings({
                         className="text-btn"
                         onClick={() => onPieceImageChange(player, null)}
                       >
-                        移除
+                        {t('common.remove')}
                       </button>
                     )}
                   </span>
@@ -377,7 +430,7 @@ export function Settings({
           </div>
 
           <div className="settings-piece-foot">
-            <span>图片支持 PNG / JPG / WebP，最大 8 MB。</span>
+            <span>{t('settings.imageSupport')}</span>
             {custom && (
               <button
                 type="button"
@@ -387,7 +440,7 @@ export function Settings({
                   onResetPieces();
                 }}
               >
-                全部恢复主题
+                {t('settings.resetPieces')}
               </button>
             )}
           </div>
@@ -395,19 +448,19 @@ export function Settings({
 
         <section className="settings-section" aria-labelledby="board-heading">
           <div className="settings-section-head">
-            <span className="settings-num">03</span>
-            <h3 id="board-heading">棋盘</h3>
-            <span className="settings-section-note">格线 / 背景</span>
+            <span className="settings-num">04</span>
+            <h3 id="board-heading">{t('settings.boardHeading')}</h3>
+            <span className="settings-section-note">
+              {t('settings.boardNote')}
+            </span>
           </div>
 
-          <p className="settings-hint">
-            手绘格线只改变画法，不改变交叉点与落子判定。
-          </p>
+          <p className="settings-hint">{t('settings.boardHint')}</p>
 
           <div
             className="board-style-grid"
             role="group"
-            aria-label="棋盘格线样式"
+            aria-label={t('settings.boardStyleAria')}
           >
             {BOARD_STYLES.map((style) => {
               const selected = style === board.style;
@@ -422,7 +475,9 @@ export function Settings({
                 >
                   <BoardStylePreview style={style} />
                   <span className="board-style-copy">
-                    <span className="board-style-name">{meta.name}</span>
+                    <span className="board-style-name">
+                      {t(meta.nameKey)}
+                    </span>
                     <span className="board-style-note">{meta.note}</span>
                   </span>
                   <span className="theme-check" aria-hidden="true">
@@ -445,23 +500,25 @@ export function Settings({
               aria-hidden="true"
             />
             <span className="board-custom-copy">
-              <span className="board-custom-title">棋盘背景</span>
+              <span className="board-custom-title">
+                {t('settings.boardBackground')}
+              </span>
               <span className="board-custom-note">
                 {board.image
-                  ? '自定义图片'
+                  ? t('settings.boardImage')
                   : board.face
-                    ? '自定义底色'
-                    : '跟随主题底色'}
+                    ? t('settings.boardFace')
+                    : t('settings.boardFollow')}
               </span>
             </span>
 
             <label className="piece-color">
-              <span>底色</span>
+              <span>{t('settings.boardColor')}</span>
               <input
                 type="color"
                 value={boardFace}
                 onChange={(event) => onBoardFaceChange(event.target.value)}
-                aria-label="棋盘底色"
+                aria-label={t('settings.boardColorAria')}
               />
               <code>{boardFace.toUpperCase()}</code>
             </label>
@@ -472,10 +529,12 @@ export function Settings({
                 className="text-btn piece-follow"
                 onClick={() => onBoardFaceChange(null)}
               >
-                跟随主题
+                {t('common.followTheme')}
               </button>
             ) : (
-              <span className="piece-follow-note">主题色</span>
+              <span className="piece-follow-note">
+                {t('common.themeColor')}
+              </span>
             )}
 
             <span className="piece-image-actions">
@@ -489,10 +548,10 @@ export function Settings({
                   disabled={boardBusy}
                 />
                 {boardBusy
-                  ? '处理中…'
+                  ? t('common.processing')
                   : board.image
-                    ? '更换背景'
-                    : '上传背景'}
+                    ? t('settings.changeBackground')
+                    : t('settings.uploadBackground')}
               </label>
               {board.image && (
                 <button
@@ -500,7 +559,7 @@ export function Settings({
                   className="text-btn"
                   onClick={() => onBoardImageChange(null)}
                 >
-                  移除
+                  {t('common.remove')}
                 </button>
               )}
             </span>
@@ -508,7 +567,7 @@ export function Settings({
 
           {board.image && (
             <label className="board-veil-control">
-              <span>背景蒙版</span>
+              <span>{t('settings.veil')}</span>
               <input
                 type="range"
                 min={0}
@@ -524,7 +583,7 @@ export function Settings({
           )}
 
           <div className="settings-piece-foot">
-            <span>背景支持 PNG / JPG / WebP，最大 12 MB，保存在本机。</span>
+            <span>{t('settings.boardSupport')}</span>
             {customBoard && (
               <button
                 type="button"
@@ -534,22 +593,22 @@ export function Settings({
                   onResetBoard();
                 }}
               >
-                恢复默认棋盘
+                {t('settings.resetBoard')}
               </button>
             )}
           </div>
 
-          {error && (
+          {error !== null && (
             <p className="settings-error" role="alert">
-              {error}
+              {imageErrorMessage(error)}
             </p>
           )}
         </section>
 
         <footer className="settings-foot">
-          <span className="settings-saved">外观保存在本机</span>
+          <span className="settings-saved">{t('settings.saved')}</span>
           <button type="button" className="btn-solid" onClick={onClose}>
-            完成
+            {t('settings.done')}
           </button>
         </footer>
       </div>

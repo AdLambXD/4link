@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pickText } from '../i18n';
 import { canDrop, drop } from './rules';
 import {
   TUTORIALS,
@@ -17,7 +18,7 @@ describe('新手教程', () => {
   });
 
   for (const lesson of TUTORIALS) {
-    it(`#${lesson.no}「${lesson.title}」的步骤可以完整走通`, () => {
+    it(`#${lesson.no}「${pickText(lesson.title, 'zh-CN')}」的步骤可以完整走通`, () => {
       let state = createTutorialState(lesson);
       expect(state.status).toBe('playing');
       expect(lesson.human).toBe(1);
@@ -27,7 +28,7 @@ describe('新手教程', () => {
 
       for (let i = 0; i < lesson.steps.length; i++) {
         const step = lesson.steps[i];
-        expect(step.prompt.trim().length).toBeGreaterThan(0);
+        expect(pickText(step.prompt, 'zh-CN').trim().length).toBeGreaterThan(0);
         expect(canDrop(state, step.expect)).toBe(true);
 
         state = drop(state, step.expect);

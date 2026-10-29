@@ -5,11 +5,13 @@
  * 都由这里的 CSS 变量驱动。新增主题只需追加一个对象。
  */
 
+import { lt, type LocalizedText } from './i18n';
+
 export type SkinScheme = 'light' | 'dark';
 
 export interface Skin {
   readonly id: string;
-  readonly name: string;
+  readonly name: LocalizedText;
   readonly note: string;
   readonly scheme: SkinScheme;
   readonly vars: Readonly<Record<string, string>>;
@@ -18,7 +20,7 @@ export interface Skin {
 export const SKINS = [
   {
     id: 'washi',
-    name: '和纸',
+    name: lt('和纸', '和紙', 'Washi'),
     note: 'WASHI',
     scheme: 'light',
     vars: {
@@ -51,7 +53,7 @@ export const SKINS = [
   },
   {
     id: 'kaya',
-    name: '榧木',
+    name: lt('榧木', '榧木', 'Kaya'),
     note: 'KAYA',
     scheme: 'light',
     vars: {
@@ -84,7 +86,7 @@ export const SKINS = [
   },
   {
     id: 'celadon',
-    name: '青瓷',
+    name: lt('青瓷', '青瓷', 'Celadon'),
     note: 'CELADON',
     scheme: 'light',
     vars: {
@@ -117,7 +119,7 @@ export const SKINS = [
   },
   {
     id: 'indigo',
-    name: '蓝染',
+    name: lt('蓝染', '藍染', 'Indigo'),
     note: 'INDIGO',
     scheme: 'dark',
     vars: {

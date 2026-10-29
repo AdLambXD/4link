@@ -7,6 +7,30 @@ export const MAX_BOARD_UPLOAD_BYTES = 12 * 1024 * 1024;
 const PIECE_OUTPUT_SIZE = 256;
 const BOARD_OUTPUT_SIZE = 1024;
 
+export type ImageErrorCode =
+  | 'not-image'
+  | 'too-large'
+  | 'unreadable'
+  | 'invalid-size'
+  | 'unsupported'
+  | 'too-complex';
+
+/** 图片处理错误只带错误码与参数，文案交给当前语言的字典。 */
+export class ImageError extends Error {
+  readonly code: ImageErrorCode;
+  readonly params: Readonly<Record<string, string | number>>;
+
+  constructor(
+    code: ImageErrorCode,
+    params: Readonly<Record<string, string | number>> = {},
+  ) {
+    super(code);
+    this.name = 'ImageError';
+    this.code = code;
+    this.params = params;
+  }
+}
+
 interface SquareImageOptions {
   /** 输出正方形边长。 */
   size: number;
@@ -16,15 +40,13 @@ interface SquareImageOptions {
   maxLength: number;
   /** 依次尝试的 WebP 质量。 */
   qualities: readonly number[];
-  /** 原图过大时的提示语。 */
-  tooLargeMessage: string;
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('无法读取这张图片'));
+    image.onerror = () => reject(new ImageError('unreadable'));
     image.src = url;
   });
 }
@@ -38,17 +60,19 @@ async function fileToSquareDataUrl(
   options: SquareImageOptions,
 ): Promise<string> {
   if (!file.type.startsWith('image/')) {
-    throw new Error('请选择图片文件（PNG / JPG / WebP）');
+    throw new ImageError('not-image');
   }
   if (file.size > options.maxBytes) {
-    throw new Error(options.tooLargeMessage);
+    throw new ImageError('too-large', {
+      maxMb: Math.round(options.maxBytes / 1024 / 1024),
+    });
   }
 
   const objectUrl = URL.createObjectURL(file);
   try {
     const image = await loadImage(objectUrl);
     if (!image.naturalWidth || !image.naturalHeight) {
-      throw new Error('图片尺寸无效');
+      throw new ImageError('invalid-size');
     }
 
     const size = options.size;
@@ -56,7 +80,7 @@ async function fileToSquareDataUrl(
     canvas.width = size;
     canvas.height = size;
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('当前浏览器无法处理图片');
+    if (!context) throw new ImageError('unsupported');
 
     const scale = Math.max(
       size / image.naturalWidth,
@@ -90,7 +114,7 @@ async function fileToSquareDataUrl(
     const png = canvas.toDataURL('image/png');
     if (png.length <= options.maxLength) return png;
 
-    throw new Error('图片太复杂，请换一张更简单的图片');
+    throw new ImageError('too-complex');
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -103,7 +127,6 @@ export function imageFileToDataUrl(file: File): Promise<string> {
     maxBytes: MAX_PIECE_UPLOAD_BYTES,
     maxLength: MAX_PIECE_DATA_URL_LENGTH,
     qualities: [0.86, 0.72, 0.58],
-    tooLargeMessage: '图片不能超过 8 MB',
   });
 }
 
@@ -114,6 +137,5 @@ export function boardImageFileToDataUrl(file: File): Promise<string> {
     maxBytes: MAX_BOARD_UPLOAD_BYTES,
     maxLength: MAX_BOARD_DATA_URL_LENGTH,
     qualities: [0.82, 0.68, 0.54, 0.4],
-    tooLargeMessage: '棋盘背景不能超过 12 MB',
   });
 }

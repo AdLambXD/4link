@@ -12,6 +12,7 @@
 - AI 在 Web Worker 中搜索，按棋盘尺寸自动限深
 - 12 道残局谜题（1–3 步杀，6×6 / 8×8）：玩家固定先手，AI 最优防守，限步取胜
 - 6 节新手教程：重力、横 / 竖 / 斜线、封堵与「先赢再挡」，逐步引导并记录进度
+- 多语言界面：简体中文 / 繁體中文 / English，默认跟随浏览器，可手动切换并记住选择
 - 围棋式交叉点网格、星位、木框与行列坐标；棋子落在交叉点上
 - 4 套可扩展**整站主题**：和纸 / 榧木 / 青瓷 / 蓝染（暗色），纸张、墨色、控件与棋盘一起切换
 - 设置面板：整站主题、棋盘格线 / 底色 / 背景、1–6 号棋子自定义颜色与图片，修改即时生效并持久化
@@ -31,7 +32,7 @@ npm install
 npm run dev      # 开发
 npm run build    # 类型检查 + 生产构建
 npm run preview  # 预览构建产物
-npm test         # 规则、AI、残局、教程与外观测试
+npm test         # 规则、AI、残局、教程、外观与多语言测试
 ```
 
 ## 一键启动
@@ -109,6 +110,17 @@ chmod +x start-linux.sh
 
 实现上，主题只是一组 CSS 变量（`src/skins.ts`），玩家覆盖再写到 `--p1`…`--p6` 与 `--p1-image`…`--p6-image`；棋盘覆盖写到 `--board-face` / `--board-bg-image` / `--board-bg-veil`，并通过 `data-board-style` 切换格线。新增主题只需在 `SKINS` 数组里追加一个对象，不需要改组件或样式表。
 
+## 多语言
+
+界面支持 **简体中文（zh-CN）**、**繁體中文（zh-TW）** 和 **English（en）**。首次访问跟随浏览器语言：`zh-TW` / `zh-HK` / `zh-Hant` 使用繁體，其它中文使用简体，其余语言回退到英文。报头右侧和设置面板顶部的语言开关可以随时切换，立即生效，无需刷新。
+
+- 手动选择保存在 `localStorage['4link.lang.v1']`；值无效时重新跟随浏览器。
+- 切换语言会同步更新 `<html lang>`、页面标题和 meta description。
+- 文案集中在 `src/i18n/messages.ts`：`zh-CN` 是源字典，`zh-TW` 与 `en` 用 `satisfies Messages` 约束，缺键或占位符不一致会直接编译失败。
+- 英文单复数由 `Intl.PluralRules` 处理；中文两个变体统一使用 `other`。
+- 残局与教程的标题、提示和步骤文案写成 `LocalizedText`，和盘面、步骤结构放在一起，避免翻译与关卡错位。
+- 目前不含日本語 / 한국어 / Français / Deutsch；新增语言只需在 `LOCALES`、`DICTIONARIES` 和语言开关里各加一项。
+
 ## 项目结构
 
 ```
@@ -143,7 +155,14 @@ src/
 │  ├─ TutorialCoach.tsx # 教程步骤、提示与点错反馈
 │  ├─ TutorialPanel.tsx # 教程完成 / 下一课结算
 │  ├─ PuzzlePanel.tsx   # 残局成功 / 失败 / 下一题结算
-│  └─ ResultPanel.tsx   # N 人结算面板
+│  ├─ ResultPanel.tsx   # N 人结算面板
+│  └─ LanguageSwitch.tsx # 报头 / 设置里的语言切换
+├─ i18n/
+│  ├─ types.ts          # Locale、LocalizedText、语言检测与取值
+│  ├─ messages.ts       # zh-CN / zh-TW / en 字典，类型约束缺键
+│  ├─ core.ts           # 插值、复数、浏览器语言检测
+│  ├─ I18nProvider.tsx  # Provider、useI18n、document.title / lang 同步
+│  └─ i18n.test.ts      # 键对齐、占位符、复数与语言选择
 ├─ skins.ts             # 整站主题注册表
 ├─ pieces.ts            # 棋子自定义校验、清洗与颜色 / 图片解析
 ├─ pieces.test.ts       # 自定义校验与主题变量完整性
@@ -167,6 +186,7 @@ src/
 - **教程不靠求解器**：教程盘面与步骤全部人工编排，玩家点错列不会落子，只给纠正提示；完成判定与残局共用同一套 `createPositionState()` 校验。
 - **不用外部状态库**：一局棋用 `useReducer` 足够。
 - **AI 放 Worker**：困难档最长约 1.4s，避免阻塞主线程；残局求解深度浅，直接在主线程计算。
+- **自研轻量 i18n**：不引入运行时依赖；字典用 TypeScript 约束键与占位符，游戏内容用 `LocalizedText` 跟随关卡定义，语言切换即时生效。
 
 ## 已知限制
 
@@ -188,6 +208,7 @@ src/
 - [x] v0.6 残局扩充：12 道关卡，新增双线听牌、先封后杀与 8×8 三手杀
 - [x] v0.7 棋盘自定义：手绘格线、棋盘底色与背景图、背景蒙版
 - [x] v0.7.1 手绘格线加强：不等宽、微倾斜、格距抖动与双描边外框
+- [x] v0.8 多语言：简体中文 / 繁體中文 / English，跟随浏览器并记住手动选择
 - [ ] 联机对战 / 复盘
 
 ## 参考

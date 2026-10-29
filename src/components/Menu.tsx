@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DIFFICULTY_LABELS, type Difficulty } from '../ai/engine';
+import type { Difficulty } from '../ai/engine';
 import type { BoardCustomization } from '../board';
 import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { TUTORIALS, getTutorial } from '../game/tutorial';
@@ -7,6 +7,7 @@ import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rule
 import type { PuzzleProgress, PuzzleRecord } from '../hooks/usePuzzleProgress';
 import type { TutorialProgress } from '../hooks/useTutorialProgress';
 import type { Stats } from '../hooks/useStats';
+import { useI18n, type StringKey } from '../i18n';
 import {
   PLAYER_NUMBERS,
   hasPieceCustomization,
@@ -15,6 +16,7 @@ import {
 } from '../pieces';
 import type { Skin } from '../skins';
 import { ArrowRightIcon, SettingsIcon } from './Icons';
+import { LanguageSwitch } from './LanguageSwitch';
 
 export interface MatchConfig {
   mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial';
@@ -48,6 +50,12 @@ const PLAYER_COUNTS = Array.from(
 
 const PLAYER_NOTES = ['DUO', 'TRIO', 'SQUAD', 'FIVE', 'SIX'];
 
+const DIFFICULTY_KEYS: Record<Difficulty, StringKey> = {
+  easy: 'difficulty.easy',
+  normal: 'difficulty.normal',
+  hard: 'difficulty.hard',
+};
+
 export function Menu({
   initial,
   stats,
@@ -62,6 +70,7 @@ export function Menu({
   onResetPuzzles,
   onResetTutorials,
 }: MenuProps) {
+  const { t, tp, text } = useI18n();
   const firstUnsolved = PUZZLES.find((puzzle) => !puzzleProgress[puzzle.id]?.solved) ?? PUZZLES[0];
   const firstUnsolvedTutorial =
     TUTORIALS.find((lesson) => !tutorialProgress[lesson.id]) ?? TUTORIALS[0];
@@ -87,11 +96,11 @@ export function Menu({
     : null;
   const customPieces = hasPieceCustomization(pieces);
   const boardNote = board.image
-    ? '自定义背景'
+    ? t('menu.customBackground')
     : board.face
-      ? '自定义底色'
+      ? t('menu.customFace')
       : board.style === 'handdrawn'
-        ? '手绘格线'
+        ? t('menu.handdrawn')
         : null;
 
   let step = 0;
@@ -124,52 +133,53 @@ export function Menu({
           </h1>
           <div className="masthead-side">
             <span className="issue">NO. 06</span>
+            <LanguageSwitch />
             <button
               type="button"
               className="settings-trigger"
               onClick={onOpenSettings}
-              aria-label="打开设置"
+              aria-label={t('game.settingsAria')}
             >
               <SettingsIcon />
             </button>
           </div>
         </div>
-        <p className="kicker">Four in a row · 四连引力 · 重力棋盘</p>
+        <p className="kicker">{t('app.kicker')}</p>
         <div className="rule" />
       </header>
 
       <section className="block">
         <div className="block-head">
           <span className="block-num">{num()}</span>
-          <h2>对战模式</h2>
+          <h2>{t('menu.modeHeading')}</h2>
         </div>
         <div className="choices choices-4">
           <button
             className={`choice choice-compact choice-mode${mode === 'pve' ? ' is-on' : ''}`}
             onClick={() => setMode('pve')}
           >
-            <span className="choice-main">人机对战</span>
+            <span className="choice-main">{t('menu.mode.pve')}</span>
             <span className="choice-note">SOLO</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'pvp' ? ' is-on' : ''}`}
             onClick={() => setMode('pvp')}
           >
-            <span className="choice-main">本地多人</span>
+            <span className="choice-main">{t('menu.mode.pvp')}</span>
             <span className="choice-note">LOCAL</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'puzzle' ? ' is-on' : ''}`}
             onClick={() => setMode('puzzle')}
           >
-            <span className="choice-main">残局谜题</span>
+            <span className="choice-main">{t('menu.mode.puzzle')}</span>
             <span className="choice-note">PUZZLE</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
             onClick={() => setMode('tutorial')}
           >
-            <span className="choice-main">新手教程</span>
+            <span className="choice-main">{t('menu.mode.tutorial')}</span>
             <span className="choice-note">GUIDE</span>
           </button>
         </div>
@@ -179,14 +189,17 @@ export function Menu({
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
-            <h2>选择课程</h2>
+            <h2>{t('menu.tutorialHeading')}</h2>
             <span className="puzzle-head-meta">
               <span className="puzzle-count">
-                已学 {tutorialSolvedCount} / {TUTORIALS.length}
+                {t('menu.learned', {
+                  done: tutorialSolvedCount,
+                  total: TUTORIALS.length,
+                })}
               </span>
               {tutorialSolvedCount > 0 && (
                 <button className="text-btn puzzle-reset" onClick={onResetTutorials}>
-                  重置
+                  {t('common.reset')}
                 </button>
               )}
             </span>
@@ -206,20 +219,21 @@ export function Menu({
                     <span className="puzzle-no">
                       NO.{String(lesson.no).padStart(2, '0')}
                     </span>
-                    <span className="puzzle-check" aria-label={done ? '已学习' : '未学习'}>
+                    <span className="puzzle-check" aria-label={done ? t('menu.learnedYes') : t('menu.learnedNo')}>
                       {done ? '✓' : ''}
                     </span>
                   </span>
-                  <span className="puzzle-title">{lesson.title}</span>
+                  <span className="puzzle-title">{text(lesson.title)}</span>
                   <span className="puzzle-meta">
-                    {lesson.size}×{lesson.size} · {lesson.steps.length} 步引导
+                    {lesson.size}×{lesson.size} ·{' '}
+                    {tp('menu.guidedSteps', lesson.steps.length)}
                   </span>
                 </button>
               );
             })}
           </div>
           <p className="puzzle-brief">
-            {selectedTutorial.goal} {selectedTutorial.tip}
+            {text(selectedTutorial.goal)} {text(selectedTutorial.tip)}
           </p>
         </section>
       )}
@@ -228,14 +242,17 @@ export function Menu({
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
-            <h2>选择残局</h2>
+            <h2>{t('menu.puzzleHeading')}</h2>
             <span className="puzzle-head-meta">
               <span className="puzzle-count">
-                已解 {solvedCount} / {PUZZLES.length}
+                {t('menu.solved', {
+                  done: solvedCount,
+                  total: PUZZLES.length,
+                })}
               </span>
               {solvedCount > 0 && (
                 <button className="text-btn puzzle-reset" onClick={onResetPuzzles}>
-                  重置
+                  {t('common.reset')}
                 </button>
               )}
             </span>
@@ -255,22 +272,25 @@ export function Menu({
                 >
                   <span className="puzzle-card-top">
                     <span className="puzzle-no">NO.{String(puzzle.no).padStart(2, '0')}</span>
-                    <span className="puzzle-check" aria-label={record?.solved ? '已解开' : '未解开'}>
+                    <span className="puzzle-check" aria-label={record?.solved ? t('menu.solvedYes') : t('menu.solvedNo')}>
                       {record?.solved ? '✓' : ''}
                     </span>
                   </span>
-                  <span className="puzzle-title">{puzzle.title}</span>
+                  <span className="puzzle-title">{text(puzzle.title)}</span>
                   <span className="puzzle-meta">
-                    {puzzle.size}×{puzzle.size} · {puzzle.moveLimit} 步杀
+                    {puzzle.size}×{puzzle.size} ·{' '}
+                    {t('menu.mateIn', { count: puzzle.moveLimit })}
                   </span>
                   {record?.solved && (
-                    <span className="puzzle-best">最佳 {record.best} 步</span>
+                    <span className="puzzle-best">
+                      {tp('menu.bestMoves', record.best)}
+                    </span>
                   )}
                 </button>
               );
             })}
           </div>
-          <p className="puzzle-brief">{selectedPuzzle.note}</p>
+          <p className="puzzle-brief">{text(selectedPuzzle.note)}</p>
         </section>
       )}
 
@@ -278,7 +298,7 @@ export function Menu({
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
-            <h2>玩家人数</h2>
+            <h2>{t('menu.playerHeading')}</h2>
           </div>
           <div className="choices choices-5">
             {PLAYER_COUNTS.map((count) => (
@@ -287,7 +307,9 @@ export function Menu({
                 className={`choice choice-compact${players === count ? ' is-on' : ''}`}
                 onClick={() => setPlayers(count)}
               >
-                <span className="choice-main">{count} 人</span>
+                <span className="choice-main">
+                  {t('menu.playerCount', { count })}
+                </span>
                 <span className="choice-note">{PLAYER_NOTES[count - 2]}</span>
               </button>
             ))}
@@ -299,7 +321,7 @@ export function Menu({
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
-            <h2>棋盘尺寸</h2>
+            <h2>{t('menu.boardHeading')}</h2>
           </div>
           <div className="choices choices-4">
             {BOARD_SIZES.map((boardSize) => (
@@ -311,7 +333,9 @@ export function Menu({
                 <span className="choice-main">
                   {boardSize} × {boardSize}
                 </span>
-                <span className="choice-note">{SIZE_WIN[boardSize]} 连</span>
+                <span className="choice-note">
+                  {t('menu.connect', { count: SIZE_WIN[boardSize] })}
+                </span>
               </button>
             ))}
           </div>
@@ -323,7 +347,7 @@ export function Menu({
           <section className="block">
             <div className="block-head">
               <span className="block-num">{num()}</span>
-              <h2>难度</h2>
+              <h2>{t('menu.difficultyHeading')}</h2>
             </div>
             <div className="choices choices-3">
               {(['easy', 'normal', 'hard'] as const).map((level) => (
@@ -332,7 +356,7 @@ export function Menu({
                   className={`choice${difficulty === level ? ' is-on' : ''}`}
                   onClick={() => setDifficulty(level)}
                 >
-                  <span className="choice-main">{DIFFICULTY_LABELS[level]}</span>
+                  <span className="choice-main">{t(DIFFICULTY_KEYS[level])}</span>
                   <span className="choice-note">{level.toUpperCase()}</span>
                 </button>
               ))}
@@ -342,21 +366,21 @@ export function Menu({
           <section className="block">
             <div className="block-head">
               <span className="block-num">{num()}</span>
-              <h2>谁先手</h2>
+              <h2>{t('menu.firstHeading')}</h2>
             </div>
             <div className="choices choices-2">
               <button
                 className={`choice${humanFirst ? ' is-on' : ''}`}
                 onClick={() => setHumanFirst(true)}
               >
-                <span className="choice-main">我先手</span>
+                <span className="choice-main">{t('menu.firstMe')}</span>
                 <span className="choice-note">FIRST</span>
               </button>
               <button
                 className={`choice${!humanFirst ? ' is-on' : ''}`}
                 onClick={() => setHumanFirst(false)}
               >
-                <span className="choice-main">AI 先手</span>
+                <span className="choice-main">{t('menu.firstAi')}</span>
                 <span className="choice-note">SECOND</span>
               </button>
             </div>
@@ -367,7 +391,7 @@ export function Menu({
       <section className="block">
         <div className="block-head">
           <span className="block-num">{num()}</span>
-          <h2>外观</h2>
+          <h2>{t('menu.appearanceHeading')}</h2>
         </div>
         <button
           type="button"
@@ -411,57 +435,70 @@ export function Menu({
             </span>
           </span>
           <span className="appearance-info">
-            <span className="choice-main">{skin.name}主题</span>
-            <span className="choice-note">{skin.note} · 整站风格</span>
+            <span className="choice-main">
+              {t('menu.skinTheme', { name: text(skin.name) })}
+            </span>
+            <span className="choice-note">
+              {t('menu.skinNote', { name: skin.note })}
+            </span>
             <span className="appearance-meta">
               {boardNote || customPieces
-                ? [boardNote, customPieces ? '棋子已自定义' : null]
+                ? [
+                    boardNote,
+                    customPieces ? t('menu.customPieces') : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')
-                : '主题、棋盘、棋子颜色与图片'}
+                : t('menu.appearanceMeta')}
             </span>
           </span>
           <span className="appearance-open">
             <SettingsIcon size={14} />
-            设置
+            {t('common.settings')}
           </span>
         </button>
       </section>
 
       <button className="start-btn" onClick={start}>
         <span>
-          {mode === 'puzzle' ? '开始解谜' : mode === 'tutorial' ? '开始教程' : '开始对局'}
+          {mode === 'puzzle'
+            ? t('menu.startPuzzle')
+            : mode === 'tutorial'
+              ? t('menu.startTutorial')
+              : t('menu.startMatch')}
         </span>
         <ArrowRightIcon />
       </button>
 
       {mode === 'tutorial' ? (
         <div className="scorecard">
-          <span className="scorecard-title">教程进度</span>
+          <span className="scorecard-title">{t('menu.tutorialProgress')}</span>
           <span className="score-item">
             <span className="puzzle-check">✓</span>
             {tutorialSolvedCount} / {TUTORIALS.length}
           </span>
           <span className="score-draw">
             {tutorialSolvedCount === TUTORIALS.length
-              ? '全部完成'
-              : '从落子开始，一关一关学'}
+              ? t('menu.allDone')
+              : t('menu.tutorialHint')}
           </span>
         </div>
       ) : mode === 'puzzle' ? (
         <div className="scorecard">
-          <span className="scorecard-title">残局进度</span>
+          <span className="scorecard-title">{t('menu.puzzleProgress')}</span>
           <span className="score-item">
             <span className="puzzle-check">✓</span>
             {solvedCount} / {PUZZLES.length}
           </span>
           <span className="score-draw">
-            {bestSolved === null ? '最佳 —' : `最佳 ${bestSolved} 步`}
+            {bestSolved === null
+              ? t('menu.bestNone')
+              : tp('menu.bestMoves', bestSolved)}
           </span>
         </div>
       ) : (
         <div className="scorecard">
-          <span className="scorecard-title">双人战绩</span>
+          <span className="scorecard-title">{t('menu.record')}</span>
           <span className="score-item">
             <i className="chip chip-p1" />
             {stats.p1}
@@ -470,42 +507,44 @@ export function Menu({
             <i className="chip chip-p2" />
             {stats.p2}
           </span>
-          <span className="score-item score-draw">和 {stats.draws}</span>
+          <span className="score-item score-draw">
+            {t('game.draws', { count: stats.draws })}
+          </span>
           <button className="text-btn" onClick={onResetStats}>
-            清零
+            {t('menu.clearStats')}
           </button>
         </div>
       )}
 
       <details className="notes">
-        <summary>怎么玩</summary>
+        <summary>{t('menu.howToPlay')}</summary>
         <ul>
           {mode === 'tutorial' ? (
             <>
-              <li>教程会手把手指定落点；点错不会落子，可以放心尝试。</li>
-              <li>6 节课依次介绍重力、横 / 竖 / 斜线、封堵和胜负优先级。</li>
-              <li>完成进度保存在本机；随时可以重开当前课程。</li>
+              <li>{t('menu.notes.tutorial1')}</li>
+              <li>{t('menu.notes.tutorial2')}</li>
+              <li>{t('menu.notes.tutorial3')}</li>
             </>
           ) : mode === 'puzzle' ? (
             <>
-              <li>每个残局都是一个未完成的盘面，你在限定步数内连成目标数即胜。</li>
-              <li>你固定执先手，AI 执后手；AI 会按最优防守尽量拖长战线。</li>
-              <li>步数只计算你的落子；提示会指出当前可强制取胜的一手。</li>
-              <li>解开的进度和最佳步数保存在本机。</li>
+              <li>{t('menu.notes.puzzle1')}</li>
+              <li>{t('menu.notes.puzzle2')}</li>
+              <li>{t('menu.notes.puzzle3')}</li>
+              <li>{t('menu.notes.puzzle4')}</li>
             </>
           ) : (
             <>
-              <li>方形围棋盘，轮流选一列，棋子落到该列最底部的交叉点。</li>
-              <li>2–6 人本地轮流；3 人以上不提供 AI 和提示。</li>
-              <li>6×6、8×8 连 4 个获胜；12×12、16×16 连 5 个获胜。</li>
-              <li>先抢中间列；斜线和双威胁最容易漏防。</li>
+              <li>{t('menu.notes.play1')}</li>
+              <li>{t('menu.notes.play2')}</li>
+              <li>{t('menu.notes.play3')}</li>
+              <li>{t('menu.notes.play4')}</li>
             </>
           )}
-          <li>主题、棋子颜色和图片在设置中调整；选择会保存在本机。</li>
+          <li>{t('menu.notes.appearance')}</li>
         </ul>
       </details>
 
-      <p className="colophon">键盘 1–0 落子 · ESC 悔棋 · R 重开</p>
+      <p className="colophon">{t('menu.colophon')}</p>
     </main>
   );
 }
