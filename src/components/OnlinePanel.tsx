@@ -12,6 +12,7 @@ export interface OnlinePanelProps {
   onHost: () => void;
   onJoin: (code: string) => void;
   onLeave: () => void;
+  onResync: () => void;
 }
 
 type CopyState = 'idle' | 'ok' | 'fail';
@@ -26,6 +27,7 @@ export function OnlinePanel({
   onHost,
   onJoin,
   onLeave,
+  onResync,
 }: OnlinePanelProps) {
   const [joining, setJoining] = useState(false);
   const [input, setInput] = useState(() => roomCodeFromUrl(window.location.href) ?? '');
@@ -149,7 +151,7 @@ export function OnlinePanel({
         <>
           <div className="online-status">
             <span className="online-dot is-busy" />
-            {seat === 1 ? '房间已创建，等待对手加入…' : '正在连接房主，等待同步棋局…'}
+            {notice ?? (seat === 1 ? '房间已创建，等待对手加入…' : '正在连接房主，等待同步棋局…')}
           </div>
           {roomCodeField}
           {linkField}
@@ -159,6 +161,27 @@ export function OnlinePanel({
               : '确认对手已经创建了同一房间码；连上后会直接进入对局。'}
           </p>
           <div className="online-actions">
+            <button type="button" className="btn-line" onClick={onLeave}>
+              离开房间
+            </button>
+          </div>
+        </>
+      )}
+
+      {phase === 'syncing' && (
+        <>
+          <div className="online-status">
+            <span className="online-dot is-busy" />
+            {notice ?? '已连接房主，正在同步棋局…'}
+          </div>
+          {roomCodeField}
+          <p className="online-note">
+            连上对手后还需要拿到这一局的局面才会开局；没反应可以点「重新同步」。
+          </p>
+          <div className="online-actions">
+            <button type="button" className="btn-line" onClick={onResync}>
+              重新同步
+            </button>
             <button type="button" className="btn-line" onClick={onLeave}>
               离开房间
             </button>

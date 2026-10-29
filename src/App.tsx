@@ -647,6 +647,7 @@ export default function App() {
             onHost: online.host,
             onJoin: online.join,
             onLeave: online.leave,
+            onResync: online.resync,
           }}
           onOpenSettings={openSettings}
           onStart={startMatch}
@@ -785,7 +786,11 @@ export default function App() {
               <div className="score-inline online-inline" title="联机房间">
                 <span
                   className={`online-dot${
-                    online.peerConnected ? ' is-on' : online.phase === 'left' ? '' : ' is-busy'
+                    online.phase === 'playing'
+                      ? ' is-on'
+                      : online.phase === 'left'
+                        ? ''
+                        : ' is-busy'
                   }`}
                 />
                 <span className="online-inline-code">{online.code}</span>

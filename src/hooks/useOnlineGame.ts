@@ -27,7 +27,15 @@ import {
 import { connect } from '../net/connect';
 import type { NetStrategy, Transport } from '../net/transport';
 
-export type OnlinePhase = 'idle' | 'connecting' | 'waiting' | 'playing' | 'left' | 'error';
+export type OnlinePhase =
+  | 'idle'
+  | 'connecting'
+  | 'waiting'
+  /** 已连上对手，但还没收到第一份权威局面。 */
+  | 'syncing'
+  | 'playing'
+  | 'left'
+  | 'error';
 
 export type OnlineRole = 'host' | 'guest';
 
@@ -65,6 +73,10 @@ const IDLE: OnlineSnapshot = {
   rematchPeer: false,
 };
 
+/** 访客等待权威局面时重发 sync 的间隔与次数上限。 */
+const SYNC_INTERVAL_MS = 1500;
+const SYNC_MAX_TRIES = 8;
+
 /** 开发环境允许用 ?net=local 走 BroadcastChannel，方便同一台机器开两个标签页调试。 */
 function resolveStrategy(fallback: NetStrategy): NetStrategy {
   if (!import.meta.env.DEV) return fallback;
@@ -97,6 +109,7 @@ export function useOnlineGame({
   const gameRef = useRef<GameState | null>(null);
   const peerRef = useRef<string | null>(null);
   const probeRef = useRef<{ peerId: string; nonce: number; timer: number } | null>(null);
+  const syncRef = useRef<{ peerId: string; tries: number; timer: number } | null>(null);
   const roleRef = useRef<OnlineRole | null>(null);
   const rematchMineRef = useRef(false);
   const rematchPeerRef = useRef(false);
@@ -108,30 +121,98 @@ export function useOnlineGame({
     setSnapshot((prev) => ({ ...prev, ...next }));
   }, []);
 
-  const send = useCallback((message: NetMessage, peerId?: string) => {
-    transportRef.current?.send(message, peerId);
+  const debug = useCallback((...args: unknown[]) => {
+    if (import.meta.env.DEV) console.debug('[4link/net]', ...args);
   }, []);
+
+  /** 停止访客的周期性 sync 重试。 */
+  const stopSync = useCallback(() => {
+    if (syncRef.current) {
+      window.clearTimeout(syncRef.current.timer);
+      syncRef.current = null;
+    }
+  }, []);
+
+  const send = useCallback(
+    (message: NetMessage, peerId?: string) => {
+      const transport = transportRef.current;
+      if (!transport) {
+        debug('传输未就绪，消息被丢弃：', message.t);
+        return;
+      }
+      try {
+        const result = transport.send(message, peerId);
+        if (result && typeof result.then === 'function') {
+          void result.catch((error: unknown) => {
+            console.warn('[4link/net] 发送失败：', message.t, error);
+          });
+        }
+      } catch (error) {
+        console.warn('[4link/net] 发送失败：', message.t, error);
+      }
+    },
+    [debug],
+  );
 
   const publish = useCallback((state: GameState) => {
     gameRef.current = state;
     onStateRef.current(state);
   }, []);
 
-  const clearRoom = useCallback((next: Partial<OnlineSnapshot>) => {
-    if (probeRef.current) {
-      window.clearTimeout(probeRef.current.timer);
-      probeRef.current = null;
-    }
-    transportRef.current?.leave();
-    transportRef.current = null;
-    gameRef.current = null;
-    peerRef.current = null;
-    roleRef.current = null;
-    rematchMineRef.current = false;
-    rematchPeerRef.current = false;
-    generationRef.current += 1;
-    setSnapshot({ ...IDLE, ...next });
-  }, []);
+  const sendState = useCallback(
+    (state: GameState, peerId?: string) => {
+      send({ t: 'state', state, hash: hashState(state) }, peerId);
+    },
+    [send],
+  );
+
+  /**
+   * 访客反复请求局面，直到收到合法 state。
+   *
+   * WebRTC 数据通道刚建立时首条消息可能丢失，只发一次 sync 会永久卡住；
+   * 这里按固定间隔重试，收到 state 或离开房间时由调用方 stopSync()。
+   */
+  const startSyncLoop = useCallback(
+    (peerId: string) => {
+      stopSync();
+      let tries = 0;
+      const tick = () => {
+        send({ t: 'sync' }, peerId);
+        tries += 1;
+        if (tries >= SYNC_MAX_TRIES) {
+          syncRef.current = null;
+          patch({
+            notice: '仍未收到房主的棋局：可以点「重新同步」，或离开房间后用同一房间码重新加入。',
+          });
+          return;
+        }
+        const timer = window.setTimeout(tick, SYNC_INTERVAL_MS);
+        syncRef.current = { peerId, tries, timer };
+      };
+      tick();
+    },
+    [patch, send, stopSync],
+  );
+
+  const clearRoom = useCallback(
+    (next: Partial<OnlineSnapshot>) => {
+      stopSync();
+      if (probeRef.current) {
+        window.clearTimeout(probeRef.current.timer);
+        probeRef.current = null;
+      }
+      transportRef.current?.leave();
+      transportRef.current = null;
+      gameRef.current = null;
+      peerRef.current = null;
+      roleRef.current = null;
+      rematchMineRef.current = false;
+      rematchPeerRef.current = false;
+      generationRef.current += 1;
+      setSnapshot({ ...IDLE, ...next });
+    },
+    [stopSync],
+  );
 
   const beginRematch = useCallback(() => {
     const game = gameRef.current;
@@ -140,14 +221,43 @@ export function useOnlineGame({
     rematchMineRef.current = false;
     rematchPeerRef.current = false;
     publish(fresh);
-    send({ t: 'state', state: fresh, hash: hashState(fresh) });
+    sendState(fresh);
     patch({ rematchMine: false, rematchPeer: false, notice: null });
-  }, [patch, publish, send]);
+  }, [patch, publish, sendState]);
+
+  const acceptPeer = useCallback(
+    (peerId: string) => {
+      peerRef.current = peerId;
+      const role = roleRef.current;
+
+      if (role === 'host') {
+        patch({ peerConnected: true, phase: 'playing', notice: null });
+        const game = gameRef.current;
+        if (game) {
+          // 让房主自己的界面也进入对局，并把局面发给刚加入的访客。
+          publish(game);
+          sendState(game, peerId);
+        }
+        return;
+      }
+
+      // 访客在收到第一份合法局面之前不能算「对局中」，
+      // 否则会停在「对局进行中」但棋盘打不开的状态。
+      patch({
+        peerConnected: true,
+        phase: 'syncing',
+        notice: '已连接房主，正在同步棋局…',
+      });
+      startSyncLoop(peerId);
+    },
+    [patch, publish, sendState, startSyncLoop],
+  );
 
   const handleMessage = useCallback(
     (message: NetMessage, peerId: string) => {
       const role = roleRef.current;
       if (!role) return;
+      debug('←', message.t, peerId);
 
       if (message.t === 'bye') {
         if (probeRef.current?.peerId === peerId) {
@@ -165,6 +275,7 @@ export function useOnlineGame({
 
         // 对手主动离开：保留房间和棋局，等对方用同一房间码回来。
         if (peerRef.current === peerId) {
+          stopSync();
           peerRef.current = null;
           rematchMineRef.current = false;
           rematchPeerRef.current = false;
@@ -184,13 +295,37 @@ export function useOnlineGame({
         return;
       }
 
-      if (peerRef.current !== peerId) return;
+      if (peerRef.current !== peerId) {
+        // 访客在同步阶段只认「能给出合法局面」的对端（那就是房主）；
+        // 房主在没有对手时把发来对局消息的对端认作对手（漏掉 onPeerJoin 也能自愈）。
+        const canAdopt =
+          peerRef.current === null ||
+          (role === 'guest' &&
+            message.t === 'state' &&
+            snapshotRef.current.phase !== 'playing');
+
+        if (!canAdopt) {
+          debug('忽略其他对端的消息：', message.t, peerId);
+          return;
+        }
+
+        if (role === 'host' && (message.t === 'sync' || message.t === 'play')) {
+          acceptPeer(peerId);
+          if (message.t === 'sync') return;
+        } else if (role === 'guest' && message.t === 'state') {
+          peerRef.current = peerId;
+          stopSync();
+        } else {
+          debug('忽略未知对端的消息：', message.t, peerId);
+          return;
+        }
+      }
 
       switch (message.t) {
         case 'sync': {
           if (role !== 'host') return;
           const game = gameRef.current;
-          if (game) send({ t: 'state', state: game, hash: hashState(game) }, peerId);
+          if (game) sendState(game, peerId);
           return;
         }
 
@@ -207,14 +342,14 @@ export function useOnlineGame({
             !canDrop(game, message.col)
           ) {
             // 拒绝并把权威局面推回去，访客会自己纠正。
-            send({ t: 'state', state: game, hash: hashState(game) }, peerId);
+            sendState(game, peerId);
             return;
           }
 
           const next = drop(game, message.col);
           if (next === game) return;
           publish(next);
-          send({ t: 'state', state: next, hash: hashState(next) }, peerId);
+          sendState(next);
           return;
         }
 
@@ -222,10 +357,12 @@ export function useOnlineGame({
           if (role !== 'guest') return;
           const state = sanitizeState(message.state);
           if (!state || hashState(state) !== message.hash) {
-            send({ t: 'sync' }, peerId);
+            debug('局面校验失败，重新请求同步');
+            startSyncLoop(peerId);
             return;
           }
 
+          stopSync();
           publish(state);
           if (state.count === 0) {
             rematchMineRef.current = false;
@@ -261,39 +398,46 @@ export function useOnlineGame({
         }
       }
     },
-    [beginRematch, clearRoom, patch, publish, send],
-  );
-
-  const acceptPeer = useCallback(
-    (peerId: string) => {
-      peerRef.current = peerId;
-      const role = roleRef.current;
-      patch({ peerConnected: true, phase: 'playing', notice: null });
-
-      if (role === 'host') {
-        const game = gameRef.current;
-        if (game) {
-          // 让房主自己的界面也进入对局，并把局面发给刚加入的访客。
-          publish(game);
-          send({ t: 'state', state: game, hash: hashState(game) }, peerId);
-        }
-      } else {
-        send({ t: 'sync' }, peerId);
-        patch({ notice: '已连接房主，正在同步棋局…' });
-      }
-    },
-    [patch, publish, send],
+    [acceptPeer, beginRematch, clearRoom, debug, patch, publish, send, sendState, startSyncLoop, stopSync],
   );
 
   const handlePeerJoin = useCallback(
     (peerId: string) => {
+      debug('peer join', peerId);
+      const role = roleRef.current;
+      if (!role) return;
+
+      if (peerRef.current === peerId) {
+        // 同一个对端的重复 join 事件：只补发，绝不能走「替换旧对手」逻辑，
+        // 否则会给自己真正的对手发 bye，把好好的房间拆掉。
+        const game = gameRef.current;
+        if (role === 'host' && game) sendState(game, peerId);
+        else if (role === 'guest' && snapshotRef.current.phase !== 'playing') {
+          startSyncLoop(peerId);
+        }
+        return;
+      }
+
+      if (role === 'guest') {
+        // 访客不仲裁房间归属：房间里可能有多个对端（例如第三个人也进来了），
+        // 先向新对端要一次局面，谁能给出合法 state，谁就是房主。
+        if (!peerRef.current) {
+          acceptPeer(peerId);
+        } else {
+          send({ t: 'sync' }, peerId);
+        }
+        return;
+      }
+
       if (!peerRef.current) {
         acceptPeer(peerId);
         return;
       }
 
-      // 房间里已经有一名对手：先确认它是否还在线，
+      // 房主：房间里已经有一名对手，先确认它是否还在线，
       // 这样对手掉线（没有触发 onPeerLeave）时也能用同一房间码重连。
+      // 仲裁只由房主做，新加入者不会被误认成对手。
+      stopSync();
       if (probeRef.current) window.clearTimeout(probeRef.current.timer);
       const nonce = Math.floor(Math.random() * 1e9);
       const timer = window.setTimeout(() => {
@@ -308,16 +452,18 @@ export function useOnlineGame({
       send({ t: 'ping', nonce }, peerRef.current);
       patch({ notice: '有新的连接加入，正在确认原对手是否在线…' });
     },
-    [acceptPeer, patch, send],
+    [acceptPeer, debug, patch, send, sendState, startSyncLoop, stopSync],
   );
 
   const handlePeerLeave = useCallback(
     (peerId: string) => {
+      debug('peer leave', peerId);
       if (probeRef.current?.peerId === peerId) {
         window.clearTimeout(probeRef.current.timer);
         probeRef.current = null;
       }
       if (peerRef.current !== peerId) return;
+      stopSync();
       peerRef.current = null;
       rematchMineRef.current = false;
       rematchPeerRef.current = false;
@@ -329,13 +475,14 @@ export function useOnlineGame({
         rematchPeer: false,
       });
     },
-    [patch],
+    [debug, patch, stopSync],
   );
 
   const start = useCallback(
     async (code: string, role: OnlineRole) => {
       if (roleRef.current || transportRef.current) return;
 
+      stopSync();
       const generation = ++generationRef.current;
       roleRef.current = role;
       peerRef.current = null;
@@ -390,7 +537,7 @@ export function useOnlineGame({
         });
       }
     },
-    [handleMessage, handlePeerJoin, handlePeerLeave, strategy],
+    [handleMessage, handlePeerJoin, handlePeerLeave, stopSync, strategy],
   );
 
   const host = useCallback(() => {
@@ -438,7 +585,7 @@ export function useOnlineGame({
         const next = drop(game, col);
         if (next === game) return false;
         publish(next);
-        send({ t: 'state', state: next, hash: hashState(next) });
+        sendState(next);
         return true;
       }
 
@@ -446,7 +593,7 @@ export function useOnlineGame({
       send({ t: 'play', col, count: game.count });
       return true;
     },
-    [publish, send],
+    [publish, send, sendState],
   );
 
   const requestRematch = useCallback(() => {
@@ -456,6 +603,21 @@ export function useOnlineGame({
     send({ t: 'rematch' });
     if (roleRef.current === 'host' && rematchPeerRef.current) beginRematch();
   }, [beginRematch, patch, send]);
+
+  /** 手动重新同步：访客重发 sync，房主重发当前局面。 */
+  const resync = useCallback(() => {
+    const peerId = peerRef.current;
+    if (!peerId) return;
+
+    if (roleRef.current === 'host') {
+      const game = gameRef.current;
+      if (game) sendState(game, peerId);
+      return;
+    }
+
+    patch({ notice: '正在重新同步棋局…' });
+    startSyncLoop(peerId);
+  }, [patch, sendState, startSyncLoop]);
 
   /* 分享链接带 ?room=CODE：首次打开时自动加入（StrictMode 下用延迟清理兜底）。 */
   useEffect(() => {
@@ -485,5 +647,6 @@ export function useOnlineGame({
     leave,
     play,
     requestRematch,
+    resync,
   };
 }

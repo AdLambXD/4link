@@ -14,7 +14,8 @@ export interface Transport {
   readonly strategy: NetStrategy;
   /** 当前已连上的对端 id（1v1 下最多 1 个）。 */
   peers(): string[];
-  send(message: NetMessage, peerId?: string): void;
+  /** 允许返回 Promise：上层据此发现「消息没发出去」，而不是静默丢弃。 */
+  send(message: NetMessage, peerId?: string): void | Promise<void>;
   leave(): void;
 }
 

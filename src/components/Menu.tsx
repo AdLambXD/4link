@@ -472,7 +472,7 @@ export function Menu({
               className={`online-dot${
                 online.phase === 'playing' || online.phase === 'waiting'
                   ? ' is-on'
-                  : online.phase === 'connecting'
+                  : online.phase === 'connecting' || online.phase === 'syncing'
                     ? ' is-busy'
                     : ''
               }`}
@@ -483,11 +483,13 @@ export function Menu({
                 ? '连接中'
                 : online.phase === 'waiting'
                   ? '等待对手'
-                  : online.phase === 'playing'
-                    ? '对局中'
-                    : online.phase === 'left'
-                      ? '对手已离开'
-                      : '连接失败'}
+                  : online.phase === 'syncing'
+                    ? '同步棋局中'
+                    : online.phase === 'playing'
+                      ? '对局中'
+                      : online.phase === 'left'
+                        ? '对手已离开'
+                        : '连接失败'}
           </span>
           <span className="score-draw">
             {online.code ? `房间 ${online.code}` : '1v1 · WebRTC'}

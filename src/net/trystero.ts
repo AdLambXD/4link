@@ -50,9 +50,8 @@ export async function connectTrystero(
   return {
     strategy: 'nostr',
     peers: () => Object.keys(room.getPeers()),
-    send: (message, peerId) => {
-      void action.send(JSON.stringify(message), peerId ? { target: peerId } : undefined);
-    },
+    send: (message, peerId) =>
+      action.send(JSON.stringify(message), peerId ? { target: peerId } : undefined),
     leave: () => {
       room.onPeerJoin = null;
       room.onPeerLeave = null;
