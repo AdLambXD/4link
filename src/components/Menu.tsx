@@ -5,9 +5,11 @@ import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { TUTORIALS, getTutorial } from '../game/tutorial';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
 import type { PuzzleProgress, PuzzleRecord } from '../hooks/usePuzzleProgress';
+import type { OnlinePhase } from '../hooks/useOnlineGame';
 import type { TutorialProgress } from '../hooks/useTutorialProgress';
 import type { Stats } from '../hooks/useStats';
 import { useI18n, type StringKey } from '../i18n';
+import { roomCodeFromUrl } from '../net/protocol';
 import {
   PLAYER_NUMBERS,
   hasPieceCustomization,
@@ -17,9 +19,10 @@ import {
 import type { Skin } from '../skins';
 import { ArrowRightIcon, SettingsIcon } from './Icons';
 import { LanguageSwitch } from './LanguageSwitch';
+import { OnlinePanel, type OnlinePanelProps } from './OnlinePanel';
 
 export interface MatchConfig {
-  mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial';
+  mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial' | 'online';
   difficulty: Difficulty;
   humanFirst: boolean;
   players: number;
@@ -36,6 +39,7 @@ interface MenuProps {
   skin: Skin;
   pieces: PieceCustomization;
   board: BoardCustomization;
+  online: OnlinePanelProps;
   onOpenSettings: () => void;
   onStart: (config: MatchConfig) => void;
   onResetStats: () => void;
@@ -56,6 +60,16 @@ const DIFFICULTY_KEYS: Record<Difficulty, StringKey> = {
   hard: 'difficulty.hard',
 };
 
+const ONLINE_STATUS_KEYS: Record<OnlinePhase, StringKey> = {
+  idle: 'menu.online.idle',
+  connecting: 'menu.online.connecting',
+  waiting: 'menu.online.waiting',
+  syncing: 'menu.online.syncing',
+  playing: 'menu.online.playing',
+  left: 'menu.online.left',
+  error: 'menu.online.error',
+};
+
 export function Menu({
   initial,
   stats,
@@ -64,6 +78,7 @@ export function Menu({
   skin,
   pieces,
   board,
+  online,
   onOpenSettings,
   onStart,
   onResetStats,
@@ -74,7 +89,11 @@ export function Menu({
   const firstUnsolved = PUZZLES.find((puzzle) => !puzzleProgress[puzzle.id]?.solved) ?? PUZZLES[0];
   const firstUnsolvedTutorial =
     TUTORIALS.find((lesson) => !tutorialProgress[lesson.id]) ?? TUTORIALS[0];
-  const [mode, setMode] = useState<MatchConfig['mode']>(initial.mode);
+  const [mode, setMode] = useState<MatchConfig['mode']>(() =>
+    initial.mode === 'online' || roomCodeFromUrl(window.location.href)
+      ? 'online'
+      : initial.mode,
+  );
   const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty);
   const [humanFirst, setHumanFirst] = useState(initial.humanFirst);
   const [players, setPlayers] = useState(initial.players);
@@ -107,6 +126,7 @@ export function Menu({
   const num = () => String(++step).padStart(2, '0');
 
   const start = () => {
+    if (mode === 'online') return;
     onStart({
       mode,
       difficulty,
@@ -153,7 +173,7 @@ export function Menu({
           <span className="block-num">{num()}</span>
           <h2>{t('menu.modeHeading')}</h2>
         </div>
-        <div className="choices choices-4">
+        <div className="choices mode-grid">
           <button
             className={`choice choice-compact choice-mode${mode === 'pve' ? ' is-on' : ''}`}
             onClick={() => setMode('pve')}
@@ -169,6 +189,13 @@ export function Menu({
             <span className="choice-note">LOCAL</span>
           </button>
           <button
+            className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
+            onClick={() => setMode('tutorial')}
+          >
+            <span className="choice-main">{t('menu.mode.tutorial')}</span>
+            <span className="choice-note">GUIDE</span>
+          </button>
+          <button
             className={`choice choice-compact choice-mode${mode === 'puzzle' ? ' is-on' : ''}`}
             onClick={() => setMode('puzzle')}
           >
@@ -176,14 +203,27 @@ export function Menu({
             <span className="choice-note">PUZZLE</span>
           </button>
           <button
-            className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
-            onClick={() => setMode('tutorial')}
+            className={`choice choice-compact choice-mode${mode === 'online' ? ' is-on' : ''}`}
+            onClick={() => setMode('online')}
           >
-            <span className="choice-main">{t('menu.mode.tutorial')}</span>
-            <span className="choice-note">GUIDE</span>
+            <span className="choice-main">{t('menu.mode.online')}</span>
+            <span className="choice-note">ONLINE</span>
           </button>
         </div>
       </section>
+
+      {mode === 'online' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>{t('menu.onlineHeading')}</h2>
+            <span className="puzzle-head-meta">
+              <span className="puzzle-count">1v1 · P2P</span>
+            </span>
+          </div>
+          <OnlinePanel {...online} />
+        </section>
+      )}
 
       {mode === 'tutorial' && (
         <section className="block">
@@ -317,11 +357,11 @@ export function Menu({
         </section>
       )}
 
-      {(mode === 'pve' || mode === 'pvp') && (
+      {(mode === 'pve' || mode === 'pvp' || mode === 'online') && (
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>
-            <h2>{t('menu.boardHeading')}</h2>
+            <h2>{mode === 'online' ? t('menu.onlineBoardHeading') : t('menu.boardHeading')}</h2>
           </div>
           <div className="choices choices-4">
             {BOARD_SIZES.map((boardSize) => (
@@ -459,18 +499,41 @@ export function Menu({
         </button>
       </section>
 
-      <button className="start-btn" onClick={start}>
-        <span>
-          {mode === 'puzzle'
-            ? t('menu.startPuzzle')
-            : mode === 'tutorial'
-              ? t('menu.startTutorial')
-              : t('menu.startMatch')}
-        </span>
-        <ArrowRightIcon />
-      </button>
+      {mode !== 'online' && (
+        <button className="start-btn" onClick={start}>
+          <span>
+            {mode === 'puzzle'
+              ? t('menu.startPuzzle')
+              : mode === 'tutorial'
+                ? t('menu.startTutorial')
+                : t('menu.startMatch')}
+          </span>
+          <ArrowRightIcon />
+        </button>
+      )}
 
-      {mode === 'tutorial' ? (
+      {mode === 'online' ? (
+        <div className="scorecard">
+          <span className="scorecard-title">{t('menu.onlineStatus')}</span>
+          <span className="score-item">
+            <span
+              className={`online-dot${
+                online.phase === 'playing' || online.phase === 'waiting'
+                  ? ' is-on'
+                  : online.phase === 'connecting' || online.phase === 'syncing'
+                    ? ' is-busy'
+                    : ''
+              }`}
+            />
+            {t(ONLINE_STATUS_KEYS[online.phase])}
+          </span>
+          <span className="score-draw">
+            {online.code
+              ? t('menu.onlineRoom', { code: online.code })
+              : '1v1 · WebRTC'}
+          </span>
+        </div>
+      ) : mode === 'tutorial' ? (
         <div className="scorecard">
           <span className="scorecard-title">{t('menu.tutorialProgress')}</span>
           <span className="score-item">
@@ -531,6 +594,13 @@ export function Menu({
               <li>{t('menu.notes.puzzle2')}</li>
               <li>{t('menu.notes.puzzle3')}</li>
               <li>{t('menu.notes.puzzle4')}</li>
+            </>
+          ) : mode === 'online' ? (
+            <>
+              <li>{t('menu.notes.online1')}</li>
+              <li>{t('menu.notes.online2')}</li>
+              <li>{t('menu.notes.online3')}</li>
+              <li>{t('menu.notes.online4')}</li>
             </>
           ) : (
             <>

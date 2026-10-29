@@ -30,14 +30,17 @@ import {
   makeConfig,
   sessionReducer,
   type DuoPlayer,
+  type GameState,
 } from './game/rules';
 import { useAiEngine } from './hooks/useAiEngine';
 import { useAppearance } from './hooks/useAppearance';
+import { useOnlineGame } from './hooks/useOnlineGame';
 import { usePuzzleProgress } from './hooks/usePuzzleProgress';
 import { useStats } from './hooks/useStats';
 import { useTutorialProgress } from './hooks/useTutorialProgress';
 import { useI18n, type StringKey } from './i18n';
 import { playDrop, playWin } from './lib/sound';
+import { ONLINE_ERROR_KEYS, ONLINE_NOTICE_KEYS } from './net/labels';
 
 type Screen = 'menu' | 'game';
 
@@ -134,6 +137,52 @@ export default function App() {
   const recordedRef = useRef(false);
   const prevCountRef = useRef(0);
 
+  /* ---------- 联机 ---------- */
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const handleOnlineState = useCallback((next: GameState) => {
+    const entering = screenRef.current === 'menu';
+    dispatch({ type: 'load', state: next });
+
+    if (entering) {
+      prevCountRef.current = next.count;
+      setMatch((prev) => ({
+        ...prev,
+        mode: 'online',
+        players: 2,
+        size: next.config.cols as MatchConfig['size'],
+        puzzleId: null,
+        tutorialId: null,
+      }));
+      setSeries(emptySeries(2));
+      recordedRef.current = false;
+      setResultVisible(false);
+      setHint(null);
+      setThinking(false);
+      setPuzzleSolved(false);
+      setPuzzleHints(0);
+      setPuzzleExhausted(false);
+      setPuzzleNoWin(false);
+      setTutorialStep(0);
+      setTutorialReply(null);
+      setTutorialFeedback(null);
+      setScreen('game');
+      return;
+    }
+
+    if (next.count === 0 && stateRef.current.count > 0) {
+      // 房主开了新一局
+      recordedRef.current = false;
+      setResultVisible(false);
+      setHint(null);
+    }
+  }, []);
+
+  const online = useOnlineGame({ size: match.size, onState: handleOnlineState });
+
   /* ---------- 结算 ---------- */
   useEffect(() => {
     if (screen !== 'game') return;
@@ -161,7 +210,7 @@ export default function App() {
       return { wins, draws: prev.draws + (winner === null ? 1 : 0) };
     });
 
-    if (players === 2) {
+    if (players === 2 && match.mode !== 'online') {
       record((winner ?? null) as DuoPlayer | null);
     }
     if (state.status === 'won') playWin(soundOn);
@@ -326,6 +375,8 @@ export default function App() {
 
   /* ---------- 操作 ---------- */
   const startMatch = useCallback((next: MatchConfig) => {
+    // 联机对局由 useOnlineGame 的 onState 驱动，不走本地开局流程。
+    if (next.mode === 'online') return;
     const nextPuzzle =
       next.mode === 'puzzle' ? getPuzzle(next.puzzleId) ?? PUZZLES[0] : null;
     const nextTutorial =
@@ -381,6 +432,12 @@ export default function App() {
       if (aiPlayer !== null && state.turn === aiPlayer) return;
       if (match.mode === 'puzzle' && state.turn !== 1) return;
 
+      if (match.mode === 'online') {
+        if (state.turn !== online.seat) return;
+        online.play(col);
+        return;
+      }
+
       if (match.mode === 'tutorial') {
         if (!tutorial || tutorialComplete || tutorialReply !== null) return;
         const step = tutorial.steps[tutorialStep];
@@ -415,10 +472,13 @@ export default function App() {
       tutorialStep,
       tutorialComplete,
       tutorialReply,
+      online.seat,
+      online.play,
     ],
   );
 
   const undo = useCallback(() => {
+    if (match.mode === 'online') return;
     if (thinking || puzzleExhausted || match.mode === 'tutorial') return;
     if (state.status !== 'playing') return;
     const steps = match.mode === 'pve' || match.mode === 'puzzle' ? 2 : 1;
@@ -427,6 +487,10 @@ export default function App() {
   }, [thinking, state.status, match.mode, puzzleExhausted]);
 
   const restart = useCallback(() => {
+    if (match.mode === 'online') {
+      online.requestRematch();
+      return;
+    }
     if (tutorial) {
       const loaded = createTutorialState(tutorial);
       dispatch({ type: 'load', state: loaded });
@@ -450,7 +514,7 @@ export default function App() {
     setTutorialStep(0);
     setTutorialReply(null);
     setTutorialFeedback(null);
-  }, [puzzle, tutorial]);
+  }, [match.mode, online.requestRematch, puzzle, tutorial]);
 
   const swap = useCallback(() => {
     if (match.mode !== 'pve') return;
@@ -464,6 +528,7 @@ export default function App() {
   }, [match.mode]);
 
   const askHint = useCallback(async () => {
+    if (match.mode === 'online') return;
     if (state.status !== 'playing' || thinking || hintLoading || puzzleExhausted) return;
     if (aiPlayer !== null && state.turn === aiPlayer) return;
 
@@ -581,6 +646,19 @@ export default function App() {
           skin={skin}
           pieces={pieces}
           board={board}
+          online={{
+            phase: online.phase,
+            code: online.code,
+            link: online.link,
+            seat: online.seat,
+            error: online.error,
+            errorDetail: online.errorDetail,
+            notice: online.notice,
+            onHost: online.host,
+            onJoin: online.join,
+            onLeave: online.leave,
+            onResync: online.resync,
+          }}
           onOpenSettings={openSettings}
           onStart={startMatch}
           onResetStats={resetStats}
@@ -600,6 +678,18 @@ export default function App() {
         ? t('game.turn.opponentResponding')
         : t('game.turn.yours');
     if (state.status === 'draw') return t('game.turn.draw');
+    if (match.mode === 'online') {
+      if (state.status === 'won') {
+        return state.winner === online.seat
+          ? t('result.youWin')
+          : t('result.opponentWins');
+      }
+      if (online.phase === 'left') return t('game.turn.opponentLeft');
+      if (!online.peerConnected) return t('game.turn.waitingOpponent');
+      return state.turn === online.seat
+        ? t('game.turn.yours')
+        : t('game.turn.opponentTurn');
+    }
     if (state.status === 'won') {
       if (puzzle)
         return state.winner === puzzle.human
@@ -638,7 +728,13 @@ export default function App() {
           cols: game.cols,
           rows: game.rows,
         })
-      : match.mode === 'pve'
+      : match.mode === 'online'
+        ? t('game.mode.online', {
+            code: online.code ?? '1v1',
+            cols: game.cols,
+            rows: game.rows,
+          })
+        : match.mode === 'pve'
         ? t('game.mode.pve', {
             difficulty: t(DIFFICULTY_KEYS[match.difficulty]),
             cols: game.cols,
@@ -651,25 +747,27 @@ export default function App() {
           });
 
   const canHint =
-    match.mode === 'tutorial'
-      ? Boolean(tutorial) &&
-        !tutorialComplete &&
-        state.status === 'playing' &&
-        !thinking &&
-        !hintLoading
-      : match.mode === 'puzzle'
-        ? Boolean(puzzle) &&
-          state.status === 'playing' &&
-          state.turn === 1 &&
-          !thinking &&
-          !hintLoading &&
-          !puzzleExhausted &&
-          remainingMoves > 0
-        : game.players === 2 &&
+    match.mode === 'online'
+      ? false
+      : match.mode === 'tutorial'
+        ? Boolean(tutorial) &&
+          !tutorialComplete &&
           state.status === 'playing' &&
           !thinking &&
-          !hintLoading &&
-          !isAiTurn;
+          !hintLoading
+        : match.mode === 'puzzle'
+          ? Boolean(puzzle) &&
+            state.status === 'playing' &&
+            state.turn === 1 &&
+            !thinking &&
+            !hintLoading &&
+            !puzzleExhausted &&
+            remainingMoves > 0
+          : game.players === 2 &&
+            state.status === 'playing' &&
+            !thinking &&
+            !hintLoading &&
+            !isAiTurn;
 
   const startNextPuzzle = () => {
     if (!nextPuzzle) return;
@@ -700,7 +798,10 @@ export default function App() {
           <div className="head-row">
             <button
               className="back-btn"
-              onClick={() => setScreen('menu')}
+              onClick={() => {
+                if (match.mode === 'online') online.leave();
+                setScreen('menu');
+              }}
               aria-label={t('game.backAria')}
             >
               <ArrowLeftIcon />
@@ -727,7 +828,25 @@ export default function App() {
               <span>{turnLabel}</span>
             </div>
 
-            {tutorial ? (
+            {match.mode === 'online' ? (
+              <div className="score-inline online-inline" title={t('game.aria.onlineRoom')}>
+                <span
+                  className={`online-dot${
+                    online.phase === 'playing'
+                      ? ' is-on'
+                      : online.phase === 'left'
+                        ? ''
+                        : ' is-busy'
+                  }`}
+                />
+                <span className="online-inline-code">{online.code}</span>
+                <span className="score-draws">
+                  {online.seat === 1
+                    ? t('game.online.hostSeat')
+                    : t('game.online.guestSeat')}
+                </span>
+              </div>
+            ) : tutorial ? (
               <div
                 className="score-inline puzzle-limits"
                 title={t('game.aria.tutorialProgress')}
@@ -783,6 +902,18 @@ export default function App() {
           </div>
         </header>
 
+        {match.mode === 'online' && online.phase !== 'playing' && (
+          <p className={`online-banner${online.phase === 'left' ? ' is-warn' : ''}`}>
+            {online.error
+              ? t(ONLINE_ERROR_KEYS[online.error], {
+                  detail: online.errorDetail ?? '',
+                })
+              : online.notice
+                ? t(ONLINE_NOTICE_KEYS[online.notice])
+                : t('game.online.connecting')}
+          </p>
+        )}
+
         {tutorial && (
           <TutorialCoach
             lesson={tutorial}
@@ -802,7 +933,14 @@ export default function App() {
         <div className="board-wrap">
           <Board
             state={state}
-            disabled={thinking || isAiTurn || puzzleExhausted || tutorialComplete}
+            disabled={
+              thinking ||
+              isAiTurn ||
+              puzzleExhausted ||
+              tutorialComplete ||
+              (match.mode === 'online' &&
+                (online.phase !== 'playing' || state.turn !== online.seat))
+            }
             hint={game.players === 2 ? hint : null}
             onPlay={play}
             title={
@@ -820,14 +958,26 @@ export default function App() {
                       size: puzzle.size,
                       limit: tp('game.limitMoves', puzzle.moveLimit),
                     })
-                  : undefined
+                  : match.mode === 'online'
+                    ? t('board.onlineMeta', {
+                        cols: game.cols,
+                        rows: game.rows,
+                        code: online.code ?? '',
+                      })
+                    : undefined
             }
             footer={
               tutorial
                 ? t('board.tutorialFooter')
                 : puzzle
                   ? t('board.puzzleFooter')
-                  : undefined
+                  : match.mode === 'online'
+                    ? t(
+                        online.seat === 1
+                          ? 'board.onlineFooterHost'
+                          : 'board.onlineFooterGuest',
+                      )
+                    : undefined
             }
             boardStyle={board.style}
           />
@@ -857,12 +1007,23 @@ export default function App() {
           ) : (
             <ResultPanel
               state={state}
-              mode={match.mode === 'pvp' ? 'pvp' : 'pve'}
+              mode={
+                match.mode === 'pvp'
+                  ? 'pvp'
+                  : match.mode === 'online'
+                    ? 'online'
+                    : 'pve'
+              }
+              seat={online.seat}
+              rematchPending={online.rematchMine}
               humanFirst={match.humanFirst}
               visible={resultVisible}
               onAgain={restart}
               onSwap={swap}
-              onMenu={() => setScreen('menu')}
+              onMenu={() => {
+                if (match.mode === 'online') online.leave();
+                setScreen('menu');
+              }}
             />
           )}
         </div>
@@ -881,12 +1042,13 @@ export default function App() {
             state.status === 'playing' &&
             !puzzleExhausted &&
             !tutorial &&
+            match.mode !== 'online' &&
             session.past.length > 0 &&
             !thinking
           }
           canHint={canHint}
           hintLoading={hintLoading}
-          showHint={game.players === 2}
+          showHint={game.players === 2 && match.mode !== 'online'}
         />
       </main>
       {settingsOverlay}

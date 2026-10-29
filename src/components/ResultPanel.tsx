@@ -1,10 +1,15 @@
 import type { GameState } from '../game/rules';
 import { useI18n } from '../i18n';
+import type { Seat } from '../net/protocol';
 
 interface ResultPanelProps {
   state: GameState;
-  mode: 'pvp' | 'pve';
+  mode: 'pvp' | 'pve' | 'online';
   humanFirst: boolean;
+  /** 联机模式下自己的座位。 */
+  seat?: Seat | null;
+  /** 联机模式下已经发出「再来一局」。 */
+  rematchPending?: boolean;
   visible: boolean;
   onAgain: () => void;
   onSwap: () => void;
@@ -15,6 +20,8 @@ export function ResultPanel({
   state,
   mode,
   humanFirst,
+  seat = null,
+  rematchPending = false,
   visible,
   onAgain,
   onSwap,
@@ -33,6 +40,12 @@ export function ResultPanel({
   if (draw || winner === null) {
     title = t('result.draw');
     tone = 'draw';
+  } else if (mode === 'online') {
+    title =
+      seat !== null && winner === seat
+        ? t('result.youWin')
+        : t('result.opponentWins');
+    tone = `p${winner}`;
   } else if (mode === 'pve') {
     title = winner === human ? t('result.youWin') : t('result.aiWins');
     tone = `p${winner}`;
@@ -60,11 +73,14 @@ export function ResultPanel({
               ? t('result.boardFull', { win })
               : t('result.line', { win })}
           </p>
+          {mode === 'online' && rematchPending && (
+            <p className="slip-note">{t('result.rematchPending')}</p>
+          )}
         </div>
 
         <div className="slip-actions">
-          <button className="btn-solid" onClick={onAgain}>
-            {t('result.again')}
+          <button className="btn-solid" onClick={onAgain} disabled={rematchPending}>
+            {rematchPending ? t('result.waitingOpponent') : t('result.again')}
           </button>
           {mode === 'pve' && (
             <button className="btn-line" onClick={onSwap}>

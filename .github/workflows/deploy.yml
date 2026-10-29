@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'explore/**']
   workflow_dispatch:
 
 permissions:
@@ -62,6 +62,8 @@ jobs:
 
   deploy:
     needs: build
+    # 实验分支只跑构建 / 测试，不覆盖线上 Pages。
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
