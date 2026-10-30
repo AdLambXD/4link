@@ -264,7 +264,7 @@ export const zhCN = {
   'menu.online.error': '连接失败',
   'menu.onlineRoom': '房间 {code}',
   'menu.notes.online1': '创建房间的人是房主，执先手；对手输入同一房间码后自动开局。',
-  'menu.notes.online2': '棋步通过 WebRTC 在两台设备间直连，不经过服务器，也不需要登录。',
+  'menu.notes.online2': '默认两台设备直连；对称 NAT 或公司网络连不上时，可在房间里改用 WebSocket 中继。',
   'menu.notes.online3': '联机为 1v1；房主选择的棋盘尺寸决定这一局。',
   'menu.notes.online4': '断线后房间会保留，对手用同一房间码重新加入即可续局。',
 
@@ -280,8 +280,8 @@ export const zhCN = {
   'online.copied': '已复制',
   'online.copyManual': '手动复制',
   'online.note.idle':
-    '两台设备连到同一个房间后直接 P2P 对弈，棋步不经过服务器；房主执先手。分享链接可直接把房间码带给对手。',
-  'online.connecting': '正在连接信令服务器…',
+    '先选连接方式，再创建或加入房间；房主执先手。分享链接会带上房间码与连接方式。',
+  'online.connecting': '正在建立连接…',
   'online.cancel': '取消',
   'online.waitingHost': '房间已创建，等待对手加入…',
   'online.waitingGuest': '正在连接房主，等待同步棋局…',
@@ -297,6 +297,21 @@ export const zhCN = {
   'online.back': '返回',
   'online.errorFallback': '联机出错了，请重试。',
 
+  'online.methodHeading': '连接方式',
+  'online.method.direct': '直连',
+  'online.method.directNote': 'P2P · 最快',
+  'online.method.relay': '中继',
+  'online.method.relayNote': 'WebSocket · 任何网络',
+  'online.method.directHint':
+    '棋步在两台设备间直连，延迟最低；对称 NAT、公司网络或部分手机热点可能连不上，连不上就换中继。',
+  'online.method.relayHint':
+    '棋步经中继服务器转发，几乎任何网络都能连上；延迟略高，服务器由站点内置或你自己部署。',
+  'online.relayUrl': '中继地址',
+  'online.relayUrlPlaceholder': 'wss://relay.example.com/ws',
+  'online.relayUrlHint': '需要 ws:// 或 wss:// 地址；留空则用站点内置的中继。',
+  'online.usingDirect': '连接方式：直连（P2P）',
+  'online.usingRelay': '连接方式：中继 {host}',
+
   'online.notice.syncing': '已连接房主，正在同步棋局…',
   'online.notice.peerLeft': '对手离开了房间，等待重新加入…',
   'online.notice.peerLeftWaiting': '对手已离开，房间仍然开着：让对手用同一个房间码重新加入即可续局。',
@@ -305,11 +320,14 @@ export const zhCN = {
   'online.notice.syncTimeout':
     '仍未收到房主的棋局：可以点「重新同步」，或离开房间后用同一房间码重新加入。',
   'online.notice.resyncing': '正在重新同步棋局…',
+  'online.notice.reconnecting': '连接中断，正在重连中继…',
 
   'online.error.roomFull': '房间已满：这局 1v1 已经开始了。',
   'online.error.invalidCode': '房间码是 5 位字母或数字，例如 4K7QP。',
   'online.error.connect': '无法加入房间，请检查网络后重试。',
   'online.error.signal': '信令连接失败（{detail}），请检查网络后重试。',
+  'online.error.relay': '连不上中继服务器（{detail}），请检查地址，或改用直连。',
+  'online.error.relayUrl': '中继地址需要以 ws:// 或 wss:// 开头。',
 
   'game.mode.online': '联机 · {code} · {cols}×{rows}',
   'game.turn.opponentTurn': '对手回合',
@@ -319,10 +337,14 @@ export const zhCN = {
   'game.online.hostSeat': '房主 · 先手',
   'game.online.guestSeat': '访客 · 后手',
   'game.online.connecting': '正在连接对手…',
+  'game.online.directPath': '直连',
+  'game.online.relayPath': '中继',
 
   'board.onlineMeta': '{cols} × {rows} · 房间 {code}',
   'board.onlineFooterHost': 'ONLINE · 房主先手 · P2P 直连',
   'board.onlineFooterGuest': 'ONLINE · 你执后手 · P2P 直连',
+  'board.onlineFooterHostRelay': 'ONLINE · 房主先手 · WebSocket 中继',
+  'board.onlineFooterGuestRelay': 'ONLINE · 你执后手 · WebSocket 中继',
 
   'result.opponentWins': '对手获胜',
   'result.rematchPending': '已发出「再来一局」，等对手确认。',
@@ -605,7 +627,7 @@ export const zhTW = {
   'menu.online.error': '連線失敗',
   'menu.onlineRoom': '房間 {code}',
   'menu.notes.online1': '建立房間的人是房主，執先手；對手輸入同一房間碼後自動開局。',
-  'menu.notes.online2': '棋步透過 WebRTC 在兩台裝置間直連，不經過伺服器，也不需要登入。',
+  'menu.notes.online2': '預設兩台裝置直連；對稱 NAT 或公司網路連不上時，可在房間裡改用 WebSocket 中繼。',
   'menu.notes.online3': '聯機為 1v1；房主選擇的棋盤尺寸決定這一局。',
   'menu.notes.online4': '斷線後房間會保留，對手用同一房間碼重新加入即可續局。',
 
@@ -621,8 +643,8 @@ export const zhTW = {
   'online.copied': '已複製',
   'online.copyManual': '手動複製',
   'online.note.idle':
-    '兩台裝置連到同一個房間後直接 P2P 對弈，棋步不經過伺服器；房主執先手。分享連結可直接把房間碼帶給對手。',
-  'online.connecting': '正在連線信令伺服器…',
+    '先選連線方式，再建立或加入房間；房主執先手。分享連結會帶上房間碼與連線方式。',
+  'online.connecting': '正在建立連線…',
   'online.cancel': '取消',
   'online.waitingHost': '房間已建立，等待對手加入…',
   'online.waitingGuest': '正在連線房主，等待同步棋局…',
@@ -638,6 +660,21 @@ export const zhTW = {
   'online.back': '返回',
   'online.errorFallback': '聯機出錯了，請重試。',
 
+  'online.methodHeading': '連線方式',
+  'online.method.direct': '直連',
+  'online.method.directNote': 'P2P · 最快',
+  'online.method.relay': '中繼',
+  'online.method.relayNote': 'WebSocket · 任何網路',
+  'online.method.directHint':
+    '棋步在兩台裝置間直連，延遲最低；對稱 NAT、公司網路或部分手機熱點可能連不上，連不上就換中繼。',
+  'online.method.relayHint':
+    '棋步經中繼伺服器轉發，幾乎任何網路都能連上；延遲略高，伺服器由站點內建或你自己部署。',
+  'online.relayUrl': '中繼位址',
+  'online.relayUrlPlaceholder': 'wss://relay.example.com/ws',
+  'online.relayUrlHint': '需要 ws:// 或 wss:// 位址；留空則用站點內建的中繼。',
+  'online.usingDirect': '連線方式：直連（P2P）',
+  'online.usingRelay': '連線方式：中繼 {host}',
+
   'online.notice.syncing': '已連線房主，正在同步棋局…',
   'online.notice.peerLeft': '對手離開了房間，等待重新加入…',
   'online.notice.peerLeftWaiting': '對手已離開，房間仍然開著：讓對手用同一個房間碼重新加入即可續局。',
@@ -646,11 +683,14 @@ export const zhTW = {
   'online.notice.syncTimeout':
     '仍未收到房主的棋局：可以點「重新同步」，或離開房間後用同一房間碼重新加入。',
   'online.notice.resyncing': '正在重新同步棋局…',
+  'online.notice.reconnecting': '連線中斷，正在重連中繼…',
 
   'online.error.roomFull': '房間已滿：這局 1v1 已經開始了。',
   'online.error.invalidCode': '房間碼是 5 位字母或數字，例如 4K7QP。',
   'online.error.connect': '無法加入房間，請檢查網路後重試。',
   'online.error.signal': '信令連線失敗（{detail}），請檢查網路後重試。',
+  'online.error.relay': '連不上中繼伺服器（{detail}），請檢查位址，或改用直連。',
+  'online.error.relayUrl': '中繼位址需要以 ws:// 或 wss:// 開頭。',
 
   'game.mode.online': '聯機 · {code} · {cols}×{rows}',
   'game.turn.opponentTurn': '對手回合',
@@ -660,10 +700,14 @@ export const zhTW = {
   'game.online.hostSeat': '房主 · 先手',
   'game.online.guestSeat': '訪客 · 後手',
   'game.online.connecting': '正在連線對手…',
+  'game.online.directPath': '直連',
+  'game.online.relayPath': '中繼',
 
   'board.onlineMeta': '{cols} × {rows} · 房間 {code}',
   'board.onlineFooterHost': 'ONLINE · 房主先手 · P2P 直連',
   'board.onlineFooterGuest': 'ONLINE · 你執後手 · P2P 直連',
+  'board.onlineFooterHostRelay': 'ONLINE · 房主先手 · WebSocket 中繼',
+  'board.onlineFooterGuestRelay': 'ONLINE · 你執後手 · WebSocket 中繼',
 
   'result.opponentWins': '對手獲勝',
   'result.rematchPending': '已發出「再來一局」，等對手確認。',
@@ -946,7 +990,7 @@ export const en = {
   'menu.online.error': 'Connection failed',
   'menu.onlineRoom': 'Room {code}',
   'menu.notes.online1': 'Whoever creates the room hosts and moves first; the opponent joins with the same code.',
-  'menu.notes.online2': 'Moves travel directly between the two devices over WebRTC — no server, no account.',
+  'menu.notes.online2': 'Moves go device-to-device by default; if a symmetric NAT or corporate network blocks that, switch the room to the WebSocket relay.',
   'menu.notes.online3': 'Online is 1v1; the board size picked by the host decides this game.',
   'menu.notes.online4': 'If someone drops, the room stays open — rejoin with the same code to resume.',
 
@@ -962,8 +1006,8 @@ export const en = {
   'online.copied': 'Copied',
   'online.copyManual': 'Copy manually',
   'online.note.idle':
-    'Both devices join the same room and play peer-to-peer; moves never touch a server. The host moves first, and the share link carries the room code.',
-  'online.connecting': 'Connecting to the signaling relays…',
+    'Pick how to connect, then create or join a room. The host moves first, and the share link carries both the code and the method.',
+  'online.connecting': 'Opening the connection…',
   'online.cancel': 'Cancel',
   'online.waitingHost': 'Room created, waiting for the opponent…',
   'online.waitingGuest': 'Connecting to the host, waiting for the board…',
@@ -979,6 +1023,21 @@ export const en = {
   'online.back': 'Back',
   'online.errorFallback': 'Something went wrong. Please try again.',
 
+  'online.methodHeading': 'Connection',
+  'online.method.direct': 'Direct',
+  'online.method.directNote': 'P2P · fastest',
+  'online.method.relay': 'Relay',
+  'online.method.relayNote': 'WebSocket · any network',
+  'online.method.directHint':
+    'Moves go straight between the two devices with the lowest latency. Symmetric NAT, corporate networks and some phone hotspots block this — switch to Relay when it fails.',
+  'online.method.relayHint':
+    'Moves are forwarded by a relay server, so almost any network works. Slightly higher latency; the relay is built in or one you host yourself.',
+  'online.relayUrl': 'Relay URL',
+  'online.relayUrlPlaceholder': 'wss://relay.example.com/ws',
+  'online.relayUrlHint': 'Use a ws:// or wss:// address. Leave it empty to use the built-in relay.',
+  'online.usingDirect': 'Connection: direct (P2P)',
+  'online.usingRelay': 'Connection: relay {host}',
+
   'online.notice.syncing': 'Connected, syncing the board…',
   'online.notice.peerLeft': 'Your opponent left the room. Waiting for them to rejoin…',
   'online.notice.peerLeftWaiting': 'Your opponent left, but the room stays open: rejoin with the same code to resume.',
@@ -986,11 +1045,14 @@ export const en = {
   'online.notice.kickedFull': 'The room is full — the extra player was asked to leave.',
   'online.notice.syncTimeout': 'Still no board from the host. Try Resync, or leave and rejoin with the same code.',
   'online.notice.resyncing': 'Resyncing the board…',
+  'online.notice.reconnecting': 'Connection lost — reconnecting to the relay…',
 
   'online.error.roomFull': 'Room full: this 1v1 game has already started.',
   'online.error.invalidCode': 'Room codes are 5 letters or digits, e.g. 4K7QP.',
   'online.error.connect': 'Could not join the room. Check your network and try again.',
   'online.error.signal': 'Signaling failed ({detail}). Check your network and try again.',
+  'online.error.relay': 'Could not reach the relay ({detail}). Check the address or switch to direct.',
+  'online.error.relayUrl': 'The relay address must start with ws:// or wss://.',
 
   'game.mode.online': 'Online · {code} · {cols}×{rows}',
   'game.turn.opponentTurn': 'Opponent’s turn',
@@ -1000,10 +1062,14 @@ export const en = {
   'game.online.hostSeat': 'Host · first',
   'game.online.guestSeat': 'Guest · second',
   'game.online.connecting': 'Connecting to your opponent…',
+  'game.online.directPath': 'direct',
+  'game.online.relayPath': 'relay',
 
   'board.onlineMeta': '{cols} × {rows} · Room {code}',
   'board.onlineFooterHost': 'ONLINE · Host moves first · peer-to-peer',
   'board.onlineFooterGuest': 'ONLINE · You move second · peer-to-peer',
+  'board.onlineFooterHostRelay': 'ONLINE · Host moves first · WebSocket relay',
+  'board.onlineFooterGuestRelay': 'ONLINE · You move second · WebSocket relay',
 
   'result.opponentWins': 'Opponent wins',
   'result.rematchPending': 'Rematch requested — waiting for your opponent.',

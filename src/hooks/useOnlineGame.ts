@@ -21,6 +21,7 @@ import {
   hashState,
   makeRoomCode,
   normalizeRoomCode,
+  relayFromUrl,
   roomCodeFromUrl,
   roomLink,
   sanitizeState,
@@ -29,7 +30,19 @@ import {
 } from '../net/protocol';
 import { connect } from '../net/connect';
 import type { OnlineError, OnlineNotice } from '../net/labels';
+import { RelayError, normalizeRelayUrl } from '../net/relay';
 import type { NetStrategy, Transport } from '../net/transport';
+
+/** 玩家可选的连接方式：WebRTC 直连，或经 WebSocket 中继转发。 */
+export type OnlineMethod = 'direct' | 'relay';
+
+const METHOD_STORAGE_KEY = '4link.net.method.v1';
+const RELAY_STORAGE_KEY = '4link.net.relay.v1';
+
+/** 站点构建时内置的默认中继地址（VITE_RELAY_URL）；留空表示没有默认值。 */
+export const DEFAULT_RELAY_URL = normalizeRelayUrl(
+  import.meta.env.VITE_RELAY_URL ?? '',
+) ?? '';
 
 export type OnlinePhase =
   | 'idle'
@@ -49,7 +62,7 @@ export interface OnlineSnapshot {
   seat: Seat | null;
   link: string | null;
   error: OnlineError | null;
-  /** 仅 error === 'signal' 时带上底层原因。 */
+  /** error 为 'signal' / 'relay' 时带上底层原因。 */
   errorDetail: string | null;
   notice: OnlineNotice | null;
   peerConnected: boolean;
@@ -62,6 +75,7 @@ export interface OnlineSnapshot {
 export interface UseOnlineGameOptions {
   /** 房主创建房间时使用的棋盘尺寸。 */
   size: BoardSize;
+  /** 强制传输方式；正常 UI 走 method 选择，这里只给测试用。 */
   strategy?: NetStrategy;
   /** 收到权威局面（首次同步、每一步、重开）。 */
   onState: (state: GameState) => void;
@@ -96,12 +110,51 @@ function resolveStrategy(fallback: NetStrategy): NetStrategy {
   return fallback;
 }
 
+function readStoredMethod(): OnlineMethod {
+  try {
+    return localStorage.getItem(METHOD_STORAGE_KEY) === 'relay' ? 'relay' : 'direct';
+  } catch {
+    return 'direct';
+  }
+}
+
+function readStoredRelayUrl(): string {
+  try {
+    return localStorage.getItem(RELAY_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** 分享链接里的 ?relay= 优先，其次是上次填的地址，最后才是站点默认值。 */
+function readLinkRelayUrl(): string | null {
+  try {
+    return normalizeRelayUrl(relayFromUrl(window.location.href));
+  } catch {
+    return null;
+  }
+}
+
 export function useOnlineGame({
   size,
   strategy = 'nostr',
   onState,
 }: UseOnlineGameOptions) {
   const [snapshot, setSnapshot] = useState<OnlineSnapshot>(IDLE);
+
+  const linkRelay = readLinkRelayUrl();
+  const [method, setMethodState] = useState<OnlineMethod>(() =>
+    linkRelay ? 'relay' : readStoredMethod(),
+  );
+  const [relayUrl, setRelayUrlState] = useState(() => {
+    if (linkRelay) return linkRelay;
+    return readStoredRelayUrl() || DEFAULT_RELAY_URL;
+  });
+
+  const methodRef = useRef(method);
+  methodRef.current = method;
+  const relayUrlRef = useRef(relayUrl);
+  relayUrlRef.current = relayUrl;
 
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
@@ -130,6 +183,26 @@ export function useOnlineGame({
 
   const debug = useCallback((...args: unknown[]) => {
     if (import.meta.env.DEV) console.debug('[4link/net]', ...args);
+  }, []);
+
+  const setMethod = useCallback((next: OnlineMethod) => {
+    methodRef.current = next;
+    setMethodState(next);
+    try {
+      localStorage.setItem(METHOD_STORAGE_KEY, next);
+    } catch {
+      /* 隐私模式下写入失败不影响当前页面 */
+    }
+  }, []);
+
+  const setRelayUrl = useCallback((next: string) => {
+    relayUrlRef.current = next;
+    setRelayUrlState(next);
+    try {
+      localStorage.setItem(RELAY_STORAGE_KEY, next);
+    } catch {
+      /* 同上 */
+    }
   }, []);
 
   /** 停止访客的周期性 sync 重试。 */
@@ -495,6 +568,13 @@ export function useOnlineGame({
     async (code: string, role: OnlineRole) => {
       if (roleRef.current || transportRef.current) return;
 
+      const useRelay = methodRef.current === 'relay';
+      const relayUrl = useRelay ? normalizeRelayUrl(relayUrlRef.current) : null;
+      if (useRelay && !relayUrl) {
+        patch({ phase: 'error', error: 'relayUrl', errorDetail: null });
+        return;
+      }
+
       stopSync();
       const generation = ++generationRef.current;
       roleRef.current = role;
@@ -509,12 +589,16 @@ export function useOnlineGame({
         phase: 'connecting',
         code,
         seat: role === 'host' ? 1 : 2,
-        link: roomLink(window.location.href, code),
+        link: roomLink(window.location.href, code, { relayUrl }),
       });
 
       try {
         const transport = await connect(
-          { code, strategy: resolveStrategy(strategy) },
+          {
+            code,
+            strategy: resolveStrategy(relayUrl ? 'relay' : strategy),
+            relayUrl: relayUrl ?? undefined,
+          },
           {
             onPeerJoin: handlePeerJoin,
             onPeerLeave: handlePeerLeave,
@@ -524,7 +608,7 @@ export function useOnlineGame({
               setSnapshot((prev) => ({
                 ...prev,
                 phase: 'error',
-                error: 'signal',
+                error: relayUrl ? 'relay' : 'signal',
                 errorDetail: detail,
               }));
             },
@@ -542,20 +626,22 @@ export function useOnlineGame({
         setSnapshot((prev) =>
           prev.phase === 'connecting' ? { ...prev, phase: 'waiting' } : prev,
         );
-      } catch {
+      } catch (error) {
         if (generation !== generationRef.current) return;
         roleRef.current = null;
         gameRef.current = null;
+        const full = error instanceof RelayError && error.code === 'full';
         setSnapshot({
           ...IDLE,
           phase: 'error',
-          error: 'connect',
+          error: full ? 'roomFull' : relayUrl ? 'relay' : 'connect',
+          errorDetail: error instanceof Error ? error.message : null,
           code,
           seat: role === 'host' ? 1 : 2,
         });
       }
     },
-    [handleMessage, handlePeerJoin, handlePeerLeave, stopSync, strategy],
+    [handleMessage, handlePeerJoin, handlePeerLeave, patch, stopSync, strategy],
   );
 
   const host = useCallback(() => {
@@ -579,8 +665,9 @@ export function useOnlineGame({
     clearRoom({});
     try {
       const url = new URL(window.location.href);
-      if (url.searchParams.has('room')) {
+      if (url.searchParams.has('room') || url.searchParams.has('relay')) {
         url.searchParams.delete('room');
+        url.searchParams.delete('relay');
         window.history.replaceState(null, '', url.toString());
       }
     } catch {
@@ -647,7 +734,17 @@ export function useOnlineGame({
     if (!autoJoinRef.current) {
       autoJoinRef.current = true;
       const code = roomCodeFromUrl(window.location.href);
-      if (code) void start(code, 'guest');
+      if (code) {
+        // 链接里带了 ?relay= 就说明房主走中继：先同步好选择，再加入。
+        const linked = readLinkRelayUrl();
+        if (linked) {
+          methodRef.current = 'relay';
+          relayUrlRef.current = linked;
+          setMethodState('relay');
+          setRelayUrlState(linked);
+        }
+        void start(code, 'guest');
+      }
     }
 
     return () => {
@@ -660,6 +757,11 @@ export function useOnlineGame({
 
   return {
     ...snapshot,
+    method,
+    relayUrl,
+    defaultRelayUrl: DEFAULT_RELAY_URL,
+    setMethod,
+    setRelayUrl,
     host,
     join,
     leave,

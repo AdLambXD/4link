@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { OnlinePhase } from '../hooks/useOnlineGame';
+import type { OnlineMethod, OnlinePhase } from '../hooks/useOnlineGame';
 import { useI18n } from '../i18n';
 import {
   ONLINE_ERROR_KEYS,
@@ -17,6 +17,13 @@ export interface OnlinePanelProps {
   error: OnlineError | null;
   errorDetail: string | null;
   notice: OnlineNotice | null;
+  /** 玩家选择的连接方式。 */
+  method: OnlineMethod;
+  relayUrl: string;
+  /** 构建时内置的中继地址，用作占位提示。 */
+  defaultRelayUrl: string;
+  onMethodChange: (method: OnlineMethod) => void;
+  onRelayUrlChange: (url: string) => void;
   onHost: () => void;
   onJoin: (code: string) => void;
   onLeave: () => void;
@@ -24,6 +31,14 @@ export interface OnlinePanelProps {
 }
 
 type CopyState = 'idle' | 'ok' | 'fail';
+
+function relayHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
 
 export function OnlinePanel({
   phase,
@@ -33,6 +48,11 @@ export function OnlinePanel({
   error,
   errorDetail,
   notice,
+  method,
+  relayUrl,
+  defaultRelayUrl,
+  onMethodChange,
+  onRelayUrlChange,
   onHost,
   onJoin,
   onLeave,
@@ -91,10 +111,63 @@ export function OnlinePanel({
     ? t(ONLINE_ERROR_KEYS[error], { detail: errorDetail ?? '' })
     : t('online.errorFallback');
 
+  /* 连上之后只展示实际在用的路径，避免玩家以为还在直连。 */
+  const pathLine =
+    method === 'relay'
+      ? t('online.usingRelay', { host: relayHost(relayUrl) })
+      : t('online.usingDirect');
+
+  const methodPicker = (
+    <div className="online-methods">
+      <span className="online-method-label">{t('online.methodHeading')}</span>
+      <div className="choices choices-2">
+        <button
+          type="button"
+          className={`choice choice-compact${method === 'direct' ? ' is-on' : ''}`}
+          onClick={() => onMethodChange('direct')}
+        >
+          <span className="choice-main">{t('online.method.direct')}</span>
+          <span className="choice-note">{t('online.method.directNote')}</span>
+        </button>
+        <button
+          type="button"
+          className={`choice choice-compact${method === 'relay' ? ' is-on' : ''}`}
+          onClick={() => onMethodChange('relay')}
+        >
+          <span className="choice-main">{t('online.method.relay')}</span>
+          <span className="choice-note">{t('online.method.relayNote')}</span>
+        </button>
+      </div>
+      <p className="online-note">
+        {method === 'direct'
+          ? t('online.method.directHint')
+          : t('online.method.relayHint')}
+      </p>
+      {method === 'relay' && (
+        <>
+          <div className="online-field">
+            <input
+              className="online-input online-link"
+              value={relayUrl}
+              onChange={(event) => onRelayUrlChange(event.currentTarget.value)}
+              placeholder={defaultRelayUrl || t('online.relayUrlPlaceholder')}
+              aria-label={t('online.relayUrl')}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <p className="online-note">{t('online.relayUrlHint')}</p>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="online-panel">
       {phase === 'idle' && (
         <>
+          {methodPicker}
+
           <div className="choices choices-2">
             <button type="button" className="choice choice-compact" onClick={onHost}>
               <span className="choice-main">{t('online.host')}</span>
@@ -155,6 +228,7 @@ export function OnlinePanel({
             {t('online.connecting')}
           </div>
           {roomCodeField}
+          <p className="online-note">{pathLine}</p>
           <div className="online-actions">
             <button type="button" className="btn-line" onClick={onLeave}>
               {t('online.cancel')}
@@ -175,6 +249,7 @@ export function OnlinePanel({
           <p className="online-note">
             {seat === 1 ? t('online.note.waitingHost') : t('online.note.waitingGuest')}
           </p>
+          <p className="online-note">{pathLine}</p>
           <div className="online-actions">
             <button type="button" className="btn-line" onClick={onLeave}>
               {t('online.leave')}
@@ -191,6 +266,7 @@ export function OnlinePanel({
           </div>
           {roomCodeField}
           <p className="online-note">{t('online.note.syncing')}</p>
+          <p className="online-note">{pathLine}</p>
           <div className="online-actions">
             <button type="button" className="btn-line" onClick={onResync}>
               {t('online.resync')}
@@ -209,6 +285,7 @@ export function OnlinePanel({
             {t('online.playing')}
           </div>
           {roomCodeField}
+          <p className="online-note">{pathLine}</p>
           <div className="online-actions">
             <button type="button" className="btn-line" onClick={onLeave}>
               {t('online.leave')}
@@ -226,6 +303,7 @@ export function OnlinePanel({
           {roomCodeField}
           {linkField}
           <p className="online-note">{noticeText ?? t('online.note.left')}</p>
+          <p className="online-note">{pathLine}</p>
           <div className="online-actions">
             <button type="button" className="btn-line" onClick={onLeave}>
               {t('online.leave')}

@@ -7,8 +7,12 @@
 
 import type { NetMessage } from './protocol';
 
-/** 正式环境只有 nostr；local 是同一浏览器双标签页调试用的实现。 */
-export type NetStrategy = 'nostr' | 'local';
+/**
+ * nostr  = WebRTC 直连（Trystero + 公共 nostr 信令），最快，但对称 NAT 会失败
+ * relay  = WebSocket 中继，任何网络都能连，需要一台中继服务器
+ * local  = 同一浏览器双标签页调试（仅开发环境）
+ */
+export type NetStrategy = 'nostr' | 'relay' | 'local';
 
 export interface Transport {
   readonly strategy: NetStrategy;
@@ -23,13 +27,15 @@ export interface TransportHandlers {
   onPeerJoin(peerId: string): void;
   onPeerLeave(peerId: string): void;
   onMessage(message: NetMessage, peerId: string): void;
-  /** 信令层报错原因（例如公共中继不可用）；文案由上层用 i18n 组装。 */
+  /** 传输层报错原因（例如公共中继不可用）；文案由上层用 i18n 组装。 */
   onError(detail: string): void;
 }
 
 export interface ConnectOptions {
   code: string;
   strategy?: NetStrategy;
+  /** strategy === 'relay' 时必填：wss:// 或 ws:// 地址。 */
+  relayUrl?: string;
 }
 
 export type Connect = (

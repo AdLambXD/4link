@@ -8,7 +8,7 @@
 
 - 6×6 / 8×8 / 12×12 / 16×16 四种方形棋盘（6、8 盘连 4，12、16 盘连 5）
 - 本地 2–6 人轮流对战（hot-seat），棋子颜色随人数增加
-- 联机 1v1（实验）：房间码 / 分享链接，WebRTC P2P 直连，房主权威同步
+- 联机 1v1：房间码 / 分享链接，可选 WebRTC 直连或 WebSocket 中继，房主权威同步
 - 人机对战三档（简单 / 普通 / 困难，仅 1v1）
 - AI 在 Web Worker 中搜索，按棋盘尺寸自动限深
 - 12 道残局谜题（1–3 步杀，6×6 / 8×8）：玩家固定先手，AI 最优防守，限步取胜
@@ -89,16 +89,30 @@ chmod +x start-linux.sh
 - 斜线是主战场：竖四基本靠对手漏防，横四常要叠在对手棋子上。
 - 6×6 四子棋已被求解：**后手必胜**，完美对局会在第 36 手（满盘）结束。所以本项目的「困难」是强启发式搜索，不是完美解。8×8 以上没有做求解。
 
-## 联机对战（实验）
+## 联机对战
 
-`explore/online-play` 分支加入的 1v1 联机已并入主线：房主创建房间后把 5 位房间码或分享链接发给对手，两台设备通过 WebRTC 直连，棋步不经过服务器。
+1v1 联机：房主创建房间后把 5 位房间码或分享链接发给对手，两台设备直接对弈，棋步不经过应用服务器。联机面板里可以自己选连接方式：
+
+| 方式 | 原理 | 适合 |
+| --- | --- | --- |
+| **直连** | WebRTC（Trystero + nostr 公共信令） | 同一 Wi-Fi、普通 NAT，延迟最低 |
+| **中继** | WebSocket 转发（`server/relay/`） | 对称 NAT、CGNAT、公司网络，几乎都能连 |
 
 - 房主执先手，棋盘尺寸由房主选择；访客加入后自动开局。
 - 房主是唯一权威：访客只上报落子列，房主用同一套 `rules.ts` 校验后广播完整局面，两端不会分叉；校验失败会自动重发快照。
 - 联机下禁用悔棋与提示；「再来一局」需要双方各点一次。
 - 对手掉线后房间保留，用同一房间码重新加入即可续局；房间已有对手时，新连接会被拒绝。
 - 连上对手但还没拿到局面时显示「正在同步棋局…」，访客会自动重发同步请求；长时间无响应可点「重新同步」。
-- 信令走 Trystero 的 nostr 公共中继，只交换 SDP / ICE；部分严格 NAT 或公司网络需要配置 TURN 才能连上。
+- 直连的信令走 Trystero 的 nostr 公共中继，只交换 SDP / ICE；严格 NAT 下会连不上，换中继即可。
+- 中继掉线后客户端按 0.5s→8s 退避自动重连，连回来重新同步局面，棋局不丢。
+- 分享链接会带上 `?room=` 与 `?relay=`，对手打开后自动用同一种方式。
+
+中继服务器有两种实现，客户端都只认 `wss://<host>/ws`：
+
+- **Cloudflare Workers + Durable Objects**（推荐，免运维）：见 [`server/relay/cloudflare/`](server/relay/cloudflare/)。
+- **自建 VPS**（单文件 Node、零依赖）：见 [`server/relay/node/`](server/relay/node/)。
+
+站点可以内置一个默认中继：构建时设置 `VITE_RELAY_URL=wss://relay.example.com/ws`（GitHub Actions 里用仓库变量 `RELAY_URL`），玩家点「中继」就能直接用；也可以自己填地址，或用 `?relay=` 链接覆盖。完整部署与协议说明在 [`server/relay/README.md`](server/relay/README.md)。
 
 本机调试（同一浏览器开两个标签页，不经过 WebRTC）：
 
@@ -108,7 +122,7 @@ npm run dev -- --host
 # 访客：http://localhost:5173/?net=local&room=<房间码>
 ```
 
-`?net=local` 只在开发环境生效，用 BroadcastChannel 模拟房间，方便验证同步、重连和再来一局；正式构建始终走 WebRTC。
+`?net=local` 只在开发环境生效，用 BroadcastChannel 模拟房间，方便验证同步、重连和再来一局；正式构建始终走直连或中继。
 
 当前限制：只支持 1v1；没有观战、计时和断线判负；联机战绩不写入本地双人战绩。
 
@@ -201,13 +215,20 @@ src/
 ├─ net/
 │  ├─ protocol.ts       # 联机消息、房间码、局面校验与摘要
 │  ├─ protocol.test.ts  # 房间码、恶意局面、消息解码
-│  ├─ transport.ts      # 传输层接口
+│  ├─ transport.ts      # 传输层接口（直连 / 中继 / 本机调试）
 │  ├─ labels.ts         # 联机提示 / 错误码到 i18n 键的映射
 │  ├─ trystero.ts       # WebRTC（nostr 公共信令）实现
+│  ├─ relay.ts          # WebSocket 中继实现（退避重连、消息缓存）
+│  ├─ relay.test.ts     # 中继地址、线上信封与分享链接
 │  └─ local.ts          # 开发环境 BroadcastChannel 调试实现
 ├─ App.tsx
 ├─ main.tsx
 └─ styles.css
+server/
+└─ relay/
+   ├─ README.md         # 协议、部署与验证说明
+   ├─ cloudflare/       # Workers + Durable Objects 实现（wrangler.toml）
+   └─ node/             # 单文件 Node 实现，零依赖
 ```
 
 ## 设计取舍
@@ -221,11 +242,13 @@ src/
 - **不用外部状态库**：一局棋用 `useReducer` 足够。
 - **AI 放 Worker**：困难档最长约 1.4s，避免阻塞主线程；残局求解深度浅，直接在主线程计算。
 - **自研轻量 i18n**：不引入运行时依赖；字典用 TypeScript 约束键与占位符，游戏内容用 `LocalizedText` 跟随关卡定义，语言切换即时生效。
+- **连接分级兜底**：直连最快、中继最稳；两种方式共用同一套房间状态机与协议，只替换 `Transport` 实现，分享链接里的 `?relay=` 保证双方走同一条路。
 
 ## 已知限制
 
 - 困难档不是完美解；真正的完美解需要预计算查表（6×6 约 690 亿局面）。
 - 3–6 人模式没有 AI，也没有联机（联机只做 1v1）。
+- 中继需要自备服务器：Cloudflare Workers 免费额度或一台 VPS；没有配置中继时只能直连。
 - 16×16 的 AI 会主动限深，强度低于小盘。
 - 残局目前是 12 道固定关卡，没有关卡编辑器；新增关卡需在 `src/game/puzzle.ts` 写盘面并跑测试验证。
 - 教程目前是 6 节固定课程，步骤与对手应手都写死在 `src/game/tutorial.ts`；暂不支持自定义课程或自由练习模式，教程中也不能悔棋。
@@ -244,6 +267,7 @@ src/
 - [x] v0.7.1 手绘格线加强：不等宽、微倾斜、格距抖动与双描边外框
 - [x] v0.8 多语言：简体中文 / 繁體中文 / English，跟随浏览器并记住手动选择
 - [x] v0.9 联机对战：1v1 房间码 / 分享链接、WebRTC P2P、房主权威同步与掉线续局
+- [x] v0.10 连接方式可选：WebSocket 中继（Cloudflare / 自建 VPS）、自动重连与三语文案
 - [ ] 棋谱复盘
 
 ## 参考

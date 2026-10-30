@@ -1,0 +1,22 @@
+# 4Link WebSocket 中继（Cloudflare Workers + Durable Objects）
+#
+# 部署：
+#   npx wrangler deploy
+# 本地调试：
+#   npx wrangler dev --port 8787
+#   然后前端用 ws://127.0.0.1:8787/ws 作为中继地址。
+#
+# 免费计划即可；棋类游戏消息量很小，Durable Object 空闲时会休眠。
+
+name = "4link-relay"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# 一个房间一个 Durable Object 实例。
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RelayRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayRoom"]

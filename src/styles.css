@@ -2382,6 +2382,19 @@ button {
   gap: 10px;
 }
 
+.online-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.online-method-label {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
 .online-status {
   display: flex;
   align-items: center;
@@ -2538,6 +2551,13 @@ button {
 .online-inline-code {
   font-weight: 700;
   letter-spacing: 0.18em;
+}
+
+.online-inline-path {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
 
 .online-banner {

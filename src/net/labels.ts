@@ -8,10 +8,19 @@ export type OnlineNotice =
   | 'probe'
   | 'kickedFull'
   | 'syncTimeout'
-  | 'resyncing';
+  | 'resyncing'
+  | 'reconnecting';
 
 /** 联机错误码。 */
-export type OnlineError = 'roomFull' | 'invalidCode' | 'connect' | 'signal';
+export type OnlineError =
+  | 'roomFull'
+  | 'invalidCode'
+  | 'connect'
+  | 'signal'
+  /** 中继连不上（地址错误、服务器没开、被墙）。 */
+  | 'relay'
+  /** 选了中继但地址不是 ws:// 或 wss://。 */
+  | 'relayUrl';
 
 export const ONLINE_NOTICE_KEYS: Record<OnlineNotice, StringKey> = {
   syncing: 'online.notice.syncing',
@@ -21,6 +30,7 @@ export const ONLINE_NOTICE_KEYS: Record<OnlineNotice, StringKey> = {
   kickedFull: 'online.notice.kickedFull',
   syncTimeout: 'online.notice.syncTimeout',
   resyncing: 'online.notice.resyncing',
+  reconnecting: 'online.notice.reconnecting',
 };
 
 export const ONLINE_ERROR_KEYS: Record<OnlineError, StringKey> = {
@@ -28,4 +38,6 @@ export const ONLINE_ERROR_KEYS: Record<OnlineError, StringKey> = {
   invalidCode: 'online.error.invalidCode',
   connect: 'online.error.connect',
   signal: 'online.error.signal',
+  relay: 'online.error.relay',
+  relayUrl: 'online.error.relayUrl',
 };

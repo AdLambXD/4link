@@ -654,6 +654,11 @@ export default function App() {
             error: online.error,
             errorDetail: online.errorDetail,
             notice: online.notice,
+            method: online.method,
+            relayUrl: online.relayUrl,
+            defaultRelayUrl: online.defaultRelayUrl,
+            onMethodChange: online.setMethod,
+            onRelayUrlChange: online.setRelayUrl,
             onHost: online.host,
             onJoin: online.join,
             onLeave: online.leave,
@@ -845,6 +850,11 @@ export default function App() {
                     ? t('game.online.hostSeat')
                     : t('game.online.guestSeat')}
                 </span>
+                <span className="online-inline-path">
+                  {online.method === 'relay'
+                    ? t('game.online.relayPath')
+                    : t('game.online.directPath')}
+                </span>
               </div>
             ) : tutorial ? (
               <div
@@ -973,9 +983,13 @@ export default function App() {
                   ? t('board.puzzleFooter')
                   : match.mode === 'online'
                     ? t(
-                        online.seat === 1
-                          ? 'board.onlineFooterHost'
-                          : 'board.onlineFooterGuest',
+                        online.method === 'relay'
+                          ? online.seat === 1
+                            ? 'board.onlineFooterHostRelay'
+                            : 'board.onlineFooterGuestRelay'
+                          : online.seat === 1
+                            ? 'board.onlineFooterHost'
+                            : 'board.onlineFooterGuest',
                       )
                     : undefined
             }

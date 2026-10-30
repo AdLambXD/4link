@@ -43,6 +43,9 @@ jobs:
         run: npm test
 
       - name: Build
+        # 仓库变量 RELAY_URL 会内置成默认中继地址，例如 wss://relay.example.com/ws
+        env:
+          VITE_RELAY_URL: ${{ vars.RELAY_URL }}
         run: npm run build
 
       - name: Package release

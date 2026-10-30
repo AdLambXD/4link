@@ -77,9 +77,30 @@ export function roomCodeFromUrl(href: string): string | null {
   }
 }
 
-export function roomLink(href: string, code: string): string {
+/** 分享链接里的中继地址（原样返回，交给 net/relay 校验）。 */
+export function relayFromUrl(href: string): string | null {
+  try {
+    return new URL(href).searchParams.get('relay');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 生成分享链接。
+ *
+ * 带上中继地址后，对手打开链接会自动走同一条路，
+ * 不会出现「房主用中继、访客用直连」连不上的情况。
+ */
+export function roomLink(
+  href: string,
+  code: string,
+  options?: { relayUrl?: string | null },
+): string {
   const url = new URL(href);
   url.searchParams.set('room', code);
+  if (options?.relayUrl) url.searchParams.set('relay', options.relayUrl);
+  else url.searchParams.delete('relay');
   url.hash = '';
   return url.toString();
 }
