@@ -4,6 +4,7 @@ import type { BoardCustomization } from '../board';
 import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { TUTORIALS, getTutorial } from '../game/tutorial';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
+import type { EndlessBest } from '../hooks/useEndlessBest';
 import type { PuzzleProgress, PuzzleRecord } from '../hooks/usePuzzleProgress';
 import type { OnlinePhase } from '../hooks/useOnlineGame';
 import type { TutorialProgress } from '../hooks/useTutorialProgress';
@@ -22,7 +23,7 @@ import { LanguageSwitch } from './LanguageSwitch';
 import { OnlinePanel, type OnlinePanelProps } from './OnlinePanel';
 
 export interface MatchConfig {
-  mode: 'pvp' | 'pve' | 'puzzle' | 'tutorial' | 'online';
+  mode: 'pvp' | 'pve' | 'endless' | 'puzzle' | 'tutorial' | 'online';
   difficulty: Difficulty;
   humanFirst: boolean;
   players: number;
@@ -36,6 +37,7 @@ interface MenuProps {
   stats: Stats;
   puzzleProgress: PuzzleProgress;
   tutorialProgress: TutorialProgress;
+  endlessBest: EndlessBest;
   skin: Skin;
   pieces: PieceCustomization;
   board: BoardCustomization;
@@ -45,6 +47,7 @@ interface MenuProps {
   onResetStats: () => void;
   onResetPuzzles: () => void;
   onResetTutorials: () => void;
+  onResetEndless: () => void;
 }
 
 const PLAYER_COUNTS = Array.from(
@@ -75,6 +78,7 @@ export function Menu({
   stats,
   puzzleProgress,
   tutorialProgress,
+  endlessBest,
   skin,
   pieces,
   board,
@@ -84,6 +88,7 @@ export function Menu({
   onResetStats,
   onResetPuzzles,
   onResetTutorials,
+  onResetEndless,
 }: MenuProps) {
   const { t, tp, text } = useI18n();
   const firstUnsolved = PUZZLES.find((puzzle) => !puzzleProgress[puzzle.id]?.solved) ?? PUZZLES[0];
@@ -114,6 +119,8 @@ export function Menu({
     ? Math.min(...solvedRecords.map((record) => record.best))
     : null;
   const customPieces = hasPieceCustomization(pieces);
+  const endlessRecord = size === 6 || size === 8 ? endlessBest[size] : undefined;
+  const hasEndlessBest = Object.keys(endlessBest).length > 0;
   const boardNote = board.image
     ? t('menu.customBackground')
     : board.face
@@ -129,7 +136,7 @@ export function Menu({
     if (mode === 'online') return;
     onStart({
       mode,
-      difficulty,
+      difficulty: mode === 'endless' ? 'hard' : difficulty,
       humanFirst,
       players: mode === 'pvp' ? players : 2,
       size:
@@ -180,6 +187,16 @@ export function Menu({
           >
             <span className="choice-main">{t('menu.mode.pve')}</span>
             <span className="choice-note">SOLO</span>
+          </button>
+          <button
+            className={`choice choice-compact choice-mode${mode === 'endless' ? ' is-on' : ''}`}
+            onClick={() => {
+              setMode('endless');
+              if (size !== 6 && size !== 8) setSize(6);
+            }}
+          >
+            <span className="choice-main">{t('menu.mode.endless')}</span>
+            <span className="choice-note">ENDLESS</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'pvp' ? ' is-on' : ''}`}
@@ -357,6 +374,43 @@ export function Menu({
         </section>
       )}
 
+      {mode === 'endless' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>{t('menu.endlessHeading')}</h2>
+            <span className="puzzle-head-meta">
+              <span className="puzzle-count">HARD</span>
+            </span>
+          </div>
+          <p className="puzzle-brief">{t('menu.endlessRule')}</p>
+          <div className="choices choices-2">
+            {([6, 8] as const).map((boardSize) => (
+              <button
+                key={boardSize}
+                className={`choice choice-compact${size === boardSize ? ' is-on' : ''}`}
+                onClick={() => setSize(boardSize)}
+              >
+                <span className="choice-main">
+                  {boardSize} × {boardSize}
+                </span>
+                <span className="choice-note">
+                  {t('menu.connect', { count: SIZE_WIN[boardSize] })}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="puzzle-brief">
+            {endlessRecord
+              ? tp('menu.endlessBest', endlessRecord.moves)
+              : t('menu.endlessBestNone')}
+            {endlessRecord && endlessRecord.scrolls > 0
+              ? ` · ${tp('menu.endlessScrolls', endlessRecord.scrolls)}`
+              : ''}
+          </p>
+        </section>
+      )}
+
       {(mode === 'pve' || mode === 'pvp' || mode === 'online') && (
         <section className="block">
           <div className="block-head">
@@ -383,49 +437,49 @@ export function Menu({
       )}
 
       {mode === 'pve' && (
-        <>
-          <section className="block">
-            <div className="block-head">
-              <span className="block-num">{num()}</span>
-              <h2>{t('menu.difficultyHeading')}</h2>
-            </div>
-            <div className="choices choices-3">
-              {(['easy', 'normal', 'hard'] as const).map((level) => (
-                <button
-                  key={level}
-                  className={`choice${difficulty === level ? ' is-on' : ''}`}
-                  onClick={() => setDifficulty(level)}
-                >
-                  <span className="choice-main">{t(DIFFICULTY_KEYS[level])}</span>
-                  <span className="choice-note">{level.toUpperCase()}</span>
-                </button>
-              ))}
-            </div>
-          </section>
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>{t('menu.difficultyHeading')}</h2>
+          </div>
+          <div className="choices choices-3">
+            {(['easy', 'normal', 'hard'] as const).map((level) => (
+              <button
+                key={level}
+                className={`choice${difficulty === level ? ' is-on' : ''}`}
+                onClick={() => setDifficulty(level)}
+              >
+                <span className="choice-main">{t(DIFFICULTY_KEYS[level])}</span>
+                <span className="choice-note">{level.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
-          <section className="block">
-            <div className="block-head">
-              <span className="block-num">{num()}</span>
-              <h2>{t('menu.firstHeading')}</h2>
-            </div>
-            <div className="choices choices-2">
-              <button
-                className={`choice${humanFirst ? ' is-on' : ''}`}
-                onClick={() => setHumanFirst(true)}
-              >
-                <span className="choice-main">{t('menu.firstMe')}</span>
-                <span className="choice-note">FIRST</span>
-              </button>
-              <button
-                className={`choice${!humanFirst ? ' is-on' : ''}`}
-                onClick={() => setHumanFirst(false)}
-              >
-                <span className="choice-main">{t('menu.firstAi')}</span>
-                <span className="choice-note">SECOND</span>
-              </button>
-            </div>
-          </section>
-        </>
+      {(mode === 'pve' || mode === 'endless') && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>{t('menu.firstHeading')}</h2>
+          </div>
+          <div className="choices choices-2">
+            <button
+              className={`choice${humanFirst ? ' is-on' : ''}`}
+              onClick={() => setHumanFirst(true)}
+            >
+              <span className="choice-main">{t('menu.firstMe')}</span>
+              <span className="choice-note">FIRST</span>
+            </button>
+            <button
+              className={`choice${!humanFirst ? ' is-on' : ''}`}
+              onClick={() => setHumanFirst(false)}
+            >
+              <span className="choice-main">{t('menu.firstAi')}</span>
+              <span className="choice-note">SECOND</span>
+            </button>
+          </div>
+        </section>
       )}
 
       <section className="block">
@@ -504,9 +558,11 @@ export function Menu({
           <span>
             {mode === 'puzzle'
               ? t('menu.startPuzzle')
-              : mode === 'tutorial'
-                ? t('menu.startTutorial')
-                : t('menu.startMatch')}
+              : mode === 'endless'
+                ? t('menu.startEndless')
+                : mode === 'tutorial'
+                  ? t('menu.startTutorial')
+                  : t('menu.startMatch')}
           </span>
           <ArrowRightIcon />
         </button>
@@ -532,6 +588,26 @@ export function Menu({
               ? t('menu.onlineRoom', { code: online.code })
               : '1v1 · WebRTC'}
           </span>
+        </div>
+      ) : mode === 'endless' ? (
+        <div className="scorecard">
+          <span className="scorecard-title">{t('menu.endlessHeading')}</span>
+          <span className="score-item">
+            <i className="chip chip-p1" />
+            {endlessRecord
+              ? tp('menu.endlessBest', endlessRecord.moves)
+              : t('menu.endlessBestNone')}
+          </span>
+          <span className="score-draw">
+            {endlessRecord
+              ? tp('menu.endlessScrolls', endlessRecord.scrolls)
+              : 'HARD · 6×6 / 8×8'}
+          </span>
+          {hasEndlessBest && (
+            <button className="text-btn" onClick={onResetEndless}>
+              {t('common.reset')}
+            </button>
+          )}
         </div>
       ) : mode === 'tutorial' ? (
         <div className="scorecard">
@@ -582,7 +658,14 @@ export function Menu({
       <details className="notes">
         <summary>{t('menu.howToPlay')}</summary>
         <ul>
-          {mode === 'tutorial' ? (
+          {mode === 'endless' ? (
+            <>
+              <li>{t('menu.notes.endless1')}</li>
+              <li>{t('menu.notes.endless2')}</li>
+              <li>{t('menu.notes.endless3')}</li>
+              <li>{t('menu.notes.endless4')}</li>
+            </>
+          ) : mode === 'tutorial' ? (
             <>
               <li>{t('menu.notes.tutorial1')}</li>
               <li>{t('menu.notes.tutorial2')}</li>
@@ -614,7 +697,9 @@ export function Menu({
         </ul>
       </details>
 
-      <p className="colophon">{t('menu.colophon')}</p>
+      <p className="colophon">
+        {mode === 'endless' ? t('menu.colophonEndless') : t('menu.colophon')}
+      </p>
     </main>
   );
 }

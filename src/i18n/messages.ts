@@ -349,6 +349,63 @@ export const zhCN = {
   'result.opponentWins': '对手获胜',
   'result.rematchPending': '已发出「再来一局」，等对手确认。',
   'result.waitingOpponent': '等待对手',
+
+  /* ---------- 无尽模式 ---------- */
+  'menu.mode.endless': '无尽模式',
+  'menu.endlessHeading': '无尽模式',
+  'menu.endlessRule': '你连成四子不算胜利；挡住 AI，撑得越久越好。',
+  'menu.endlessBest': {
+    one: '最佳 {count} 手',
+    other: '最佳 {count} 手',
+  },
+  'menu.endlessBestNone': '最佳 —',
+  'menu.endlessScrolls': {
+    one: '上移 {count} 次',
+    other: '上移 {count} 次',
+  },
+  'menu.startEndless': '开始防守',
+  'menu.notes.endless1': '你执防守方：AI 持续进攻，你连成四子也不算胜利。',
+  'menu.notes.endless2': '棋盘填满后整体上移一行，顶行棋子被移出，对局继续。',
+  'menu.notes.endless3':
+    '被 AI 连成四子时本局结束；按你落下的手数计分，最佳记录保存在本机。',
+  'menu.notes.endless4': '无尽模式固定困难难度，只开放 6×6 与 8×8。',
+  'menu.colophonEndless': '键盘 1–0 落子 · R 重开 · 无尽模式不能悔棋',
+
+  'game.mode.endless': '无尽 · {cols}×{rows}',
+  'game.turn.defend': '你的回合 · 防守',
+  'game.turn.aiAttacking': 'AI 进攻中…',
+  'game.turn.endlessOver': '防守结束',
+  'game.endlessMoves': {
+    one: '已撑 {count} 手',
+    other: '已撑 {count} 手',
+  },
+  'game.aria.endlessProgress': '无尽模式进度',
+  'game.endlessNotice.ignoredWin': '四连不算胜利，继续封堵 AI。',
+  'game.endlessNotice.scrolled': '棋盘上移一行，继续。',
+  'game.endlessNotice.winAndScroll': '四连不算胜利，棋盘上移一行继续。',
+
+  'board.endlessTitle': '无尽防守',
+  'board.endlessMeta': '{cols} × {rows} · 挡住 AI',
+  'board.endlessFooter': 'ENDLESS · 你连四不算赢 · 撑得越久越好',
+
+  'endless.head': 'ENDLESS · {size}×{size}',
+  'endless.aiWins': 'AI 连成四子',
+  'endless.survived': {
+    one: '你撑了 {count} 手',
+    other: '你撑了 {count} 手',
+  },
+  'endless.scrolls': {
+    one: '棋盘上移 {count} 次',
+    other: '棋盘上移 {count} 次',
+  },
+  'endless.best': {
+    one: '本尺寸最佳 {count} 手',
+    other: '本尺寸最佳 {count} 手',
+  },
+  'endless.newBest': '新纪录',
+  'endless.again': '再来一局',
+  'endless.menu': '返回菜单',
+  'endless.stamp': '防',
 } as const;
 
 type PluralForms = { one: string; other: string };
@@ -712,6 +769,63 @@ export const zhTW = {
   'result.opponentWins': '對手獲勝',
   'result.rematchPending': '已發出「再來一局」，等對手確認。',
   'result.waitingOpponent': '等待對手',
+
+  /* ---------- 無盡模式 ---------- */
+  'menu.mode.endless': '無盡模式',
+  'menu.endlessHeading': '無盡模式',
+  'menu.endlessRule': '你連成四子不算勝利；擋住 AI，撐得越久越好。',
+  'menu.endlessBest': {
+    one: '最佳 {count} 手',
+    other: '最佳 {count} 手',
+  },
+  'menu.endlessBestNone': '最佳 —',
+  'menu.endlessScrolls': {
+    one: '上移 {count} 次',
+    other: '上移 {count} 次',
+  },
+  'menu.startEndless': '開始防守',
+  'menu.notes.endless1': '你執防守方：AI 持續進攻，你連成四子也不算勝利。',
+  'menu.notes.endless2': '棋盤填滿後整體上移一行，頂行棋子被移出，對局繼續。',
+  'menu.notes.endless3':
+    '被 AI 連成四子時本局結束；按你落下的手數計分，最佳記錄保存在本機。',
+  'menu.notes.endless4': '無盡模式固定困難難度，只開放 6×6 與 8×8。',
+  'menu.colophonEndless': '鍵盤 1–0 落子 · R 重開 · 無盡模式不能悔棋',
+
+  'game.mode.endless': '無盡 · {cols}×{rows}',
+  'game.turn.defend': '你的回合 · 防守',
+  'game.turn.aiAttacking': 'AI 進攻中…',
+  'game.turn.endlessOver': '防守結束',
+  'game.endlessMoves': {
+    one: '已撐 {count} 手',
+    other: '已撐 {count} 手',
+  },
+  'game.aria.endlessProgress': '無盡模式進度',
+  'game.endlessNotice.ignoredWin': '四連不算勝利，繼續封堵 AI。',
+  'game.endlessNotice.scrolled': '棋盤上移一行，繼續。',
+  'game.endlessNotice.winAndScroll': '四連不算勝利，棋盤上移一行繼續。',
+
+  'board.endlessTitle': '無盡防守',
+  'board.endlessMeta': '{cols} × {rows} · 擋住 AI',
+  'board.endlessFooter': 'ENDLESS · 你連四不算贏 · 撐得越久越好',
+
+  'endless.head': 'ENDLESS · {size}×{size}',
+  'endless.aiWins': 'AI 連成四子',
+  'endless.survived': {
+    one: '你撐了 {count} 手',
+    other: '你撐了 {count} 手',
+  },
+  'endless.scrolls': {
+    one: '棋盤上移 {count} 次',
+    other: '棋盤上移 {count} 次',
+  },
+  'endless.best': {
+    one: '本尺寸最佳 {count} 手',
+    other: '本尺寸最佳 {count} 手',
+  },
+  'endless.newBest': '新紀錄',
+  'endless.again': '再來一局',
+  'endless.menu': '返回選單',
+  'endless.stamp': '防',
 } satisfies Messages;
 
 export const en = {
@@ -1074,6 +1188,71 @@ export const en = {
   'result.opponentWins': 'Opponent wins',
   'result.rematchPending': 'Rematch requested — waiting for your opponent.',
   'result.waitingOpponent': 'Waiting for opponent',
+
+  /* ---------- Endless ---------- */
+  'menu.mode.endless': 'Endless',
+  'menu.endlessHeading': 'Endless mode',
+  'menu.endlessRule':
+    'Your fours do not win. Block the AI and survive as long as you can.',
+  'menu.endlessBest': {
+    one: 'Best: {count} move',
+    other: 'Best: {count} moves',
+  },
+  'menu.endlessBestNone': 'Best —',
+  'menu.endlessScrolls': {
+    one: 'Scrolled {count} time',
+    other: 'Scrolled {count} times',
+  },
+  'menu.startEndless': 'Start defending',
+  'menu.notes.endless1':
+    'You defend: the AI keeps attacking, and your own fours never win.',
+  'menu.notes.endless2':
+    'When the board fills, it scrolls up one row and the top row leaves; play continues.',
+  'menu.notes.endless3':
+    'The run ends when the AI connects four. Your score is the number of moves you made; the best is saved on this device.',
+  'menu.notes.endless4':
+    'Endless is fixed to Hard and only offers 6×6 and 8×8.',
+  'menu.colophonEndless':
+    'Keys 1–0 drop · R restart · no undo in endless',
+
+  'game.mode.endless': 'Endless · {cols}×{rows}',
+  'game.turn.defend': 'Your turn · defend',
+  'game.turn.aiAttacking': 'AI attacking…',
+  'game.turn.endlessOver': 'Run over',
+  'game.endlessMoves': {
+    one: 'Survived {count} move',
+    other: 'Survived {count} moves',
+  },
+  'game.aria.endlessProgress': 'Endless progress',
+  'game.endlessNotice.ignoredWin':
+    'Fours do not win here — keep blocking the AI.',
+  'game.endlessNotice.scrolled': 'The board scrolled up one row. Keep going.',
+  'game.endlessNotice.winAndScroll':
+    'Fours do not win here — the board scrolled up one row. Keep going.',
+
+  'board.endlessTitle': 'Endless defense',
+  'board.endlessMeta': '{cols} × {rows} · Block the AI',
+  'board.endlessFooter':
+    'ENDLESS · your fours do not win · survive as long as you can',
+
+  'endless.head': 'ENDLESS · {size}×{size}',
+  'endless.aiWins': 'The AI connected four',
+  'endless.survived': {
+    one: 'You survived {count} move',
+    other: 'You survived {count} moves',
+  },
+  'endless.scrolls': {
+    one: 'Board scrolled {count} time',
+    other: 'Board scrolled {count} times',
+  },
+  'endless.best': {
+    one: 'Best for this size: {count} move',
+    other: 'Best for this size: {count} moves',
+  },
+  'endless.newBest': 'New best',
+  'endless.again': 'Play again',
+  'endless.menu': 'Back to menu',
+  'endless.stamp': 'D',
 } satisfies Messages;
 
 /** 所有语言的字典。 */

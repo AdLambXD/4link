@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { Difficulty, MoveResult } from '../ai/engine';
+import type { Difficulty, MoveOptions, MoveResult } from '../ai/engine';
 import type { DuoPlayer, GameConfig } from '../game/rules';
 
 interface Pending {
@@ -53,6 +53,7 @@ export function useAiEngine() {
       player: DuoPlayer,
       difficulty: Difficulty,
       config: GameConfig,
+      options?: MoveOptions,
     ) => {
       return new Promise<MoveResult>((resolve, reject) => {
         const worker = workerRef.current;
@@ -69,6 +70,7 @@ export function useAiEngine() {
           player,
           difficulty,
           config,
+          options,
         });
       });
     },

@@ -269,7 +269,9 @@ export type SessionAction =
   | { type: 'undo'; steps: number }
   | { type: 'reset'; turn?: Player; config?: GameConfig }
   /** 载入一个预设局面（残局谜题），清空悔棋历史。 */
-  | { type: 'load'; state: GameState };
+  | { type: 'load'; state: GameState }
+  /** 写入经过模式规则处理后的局面（无尽模式的上移 / 忽略玩家四连）。 */
+  | { type: 'advance'; state: GameState };
 
 export function sessionReducer(state: Session, action: SessionAction): Session {
   switch (action.type) {
@@ -291,5 +293,13 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
       );
     case 'load':
       return { current: action.state, past: [] };
+    case 'advance': {
+      if (action.state === state.current) return state;
+      // 无尽模式禁用悔棋，只保留最近两步，长局也不会无限占内存。
+      return {
+        current: action.state,
+        past: [...state.past, state.current].slice(-2),
+      };
+    }
   }
 }

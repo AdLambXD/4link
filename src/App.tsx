@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { Difficulty } from './ai/engine';
 import { Board } from './components/Board';
 import { Controls } from './components/Controls';
+import { EndlessPanel } from './components/EndlessPanel';
 import { ArrowLeftIcon, SettingsIcon } from './components/Icons';
 import { Menu, type MatchConfig } from './components/Menu';
 import { PuzzlePanel } from './components/PuzzlePanel';
@@ -9,6 +10,7 @@ import { ResultPanel } from './components/ResultPanel';
 import { Settings } from './components/Settings';
 import { TutorialCoach } from './components/TutorialCoach';
 import { TutorialPanel } from './components/TutorialPanel';
+import { isEndlessOver, playEndless } from './game/endless';
 import {
   PUZZLES,
   createPuzzleState,
@@ -34,6 +36,7 @@ import {
 } from './game/rules';
 import { useAiEngine } from './hooks/useAiEngine';
 import { useAppearance } from './hooks/useAppearance';
+import { useEndlessBest, type EndlessSize } from './hooks/useEndlessBest';
 import { useOnlineGame } from './hooks/useOnlineGame';
 import { usePuzzleProgress } from './hooks/usePuzzleProgress';
 import { useStats } from './hooks/useStats';
@@ -90,6 +93,13 @@ export default function App() {
   const [tutorialStep, setTutorialStep] = useState(0);
   const [tutorialReply, setTutorialReply] = useState<number | null>(null);
   const [tutorialFeedback, setTutorialFeedback] = useState<number | null>(null);
+  const [endlessMoves, setEndlessMoves] = useState(0);
+  const [endlessScrolls, setEndlessScrolls] = useState(0);
+  const [endlessNewBest, setEndlessNewBest] = useState(false);
+  const [endlessNotice, setEndlessNotice] = useState<{
+    key: StringKey;
+    id: number;
+  } | null>(null);
 
   const requestMove = useAiEngine();
   const {
@@ -117,6 +127,11 @@ export default function App() {
     recordSolve: recordTutorialSolve,
     reset: resetTutorials,
   } = useTutorialProgress();
+  const {
+    best: endlessBest,
+    recordBest: recordEndlessBest,
+    reset: resetEndlessBest,
+  } = useEndlessBest();
 
   const state = session.current;
   const game = state.config;
@@ -126,9 +141,16 @@ export default function App() {
   const tutorialComplete = tutorial
     ? isTutorialComplete(tutorial, state, tutorialStep)
     : false;
+  const human: DuoPlayer = match.humanFirst ? 1 : 2;
   const aiPlayer: DuoPlayer | null =
-    match.mode === 'pve' ? ((match.humanFirst ? 2 : 1) as DuoPlayer) : null;
+    match.mode === 'pve' || match.mode === 'endless'
+      ? human === 1
+        ? 2
+        : 1
+      : null;
   const isAiTurn = aiPlayer !== null && state.turn === aiPlayer;
+  const endlessSize: EndlessSize = match.size === 8 ? 8 : 6;
+  const endlessBestRecord = endlessBest[endlessSize];
   const humanMoves = Math.ceil(session.past.length / 2);
   const remainingMoves = puzzle ? Math.max(0, puzzle.moveLimit - humanMoves) : 0;
   const usedMoves = puzzle ? Math.min(humanMoves, puzzle.moveLimit) : humanMoves;
@@ -136,6 +158,16 @@ export default function App() {
   const nextTutorial = tutorial ? getNextTutorial(tutorial.id) : null;
   const recordedRef = useRef(false);
   const prevCountRef = useRef(0);
+
+  const showEndlessNotice = useCallback((key: StringKey) => {
+    setEndlessNotice({ key, id: Date.now() });
+  }, []);
+
+  useEffect(() => {
+    if (endlessNotice === null) return;
+    const timer = window.setTimeout(() => setEndlessNotice(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [endlessNotice]);
 
   /* ---------- 联机 ---------- */
   const screenRef = useRef(screen);
@@ -186,7 +218,7 @@ export default function App() {
   /* ---------- 结算 ---------- */
   useEffect(() => {
     if (screen !== 'game') return;
-    if (match.mode === 'tutorial') return;
+    if (match.mode === 'tutorial' || match.mode === 'endless') return;
     if (state.status === 'playing' && !puzzleExhausted) return;
     if (recordedRef.current) return;
     recordedRef.current = true;
@@ -229,6 +261,31 @@ export default function App() {
     recordSolve,
   ]);
 
+  /* ---------- 无尽模式结算 ---------- */
+  useEffect(() => {
+    if (screen !== 'game' || match.mode !== 'endless') return;
+    if (aiPlayer === null || !isEndlessOver(state, aiPlayer)) return;
+    if (recordedRef.current) return;
+    recordedRef.current = true;
+
+    const previous = endlessBestRecord?.moves ?? 0;
+    setEndlessNewBest(endlessMoves > previous);
+    recordEndlessBest(endlessSize, endlessMoves, endlessScrolls);
+    playWin(soundOn);
+  }, [
+    screen,
+    match.mode,
+    state.status,
+    state.winner,
+    aiPlayer,
+    endlessMoves,
+    endlessScrolls,
+    endlessBestRecord,
+    endlessSize,
+    recordEndlessBest,
+    soundOn,
+  ]);
+
   /* ---------- 教程完成 ---------- */
   useEffect(() => {
     if (screen !== 'game' || match.mode !== 'tutorial' || !tutorial || !tutorialComplete) {
@@ -260,7 +317,8 @@ export default function App() {
 
   /* ---------- 落子音效 ---------- */
   useEffect(() => {
-    if (screen !== 'game') {
+    // 无尽模式会满盘上移，count 不再单调递增；音效在落子分支里单独播放。
+    if (screen !== 'game' || match.mode === 'endless') {
       prevCountRef.current = state.count;
       return;
     }
@@ -269,7 +327,7 @@ export default function App() {
       if (player >= 1 && player <= 6) playDrop(player, soundOn);
     }
     prevCountRef.current = state.count;
-  }, [screen, state, soundOn]);
+  }, [screen, state, soundOn, match.mode]);
 
   /* ---------- 常规 AI 行动 ---------- */
   useEffect(() => {
@@ -279,13 +337,33 @@ export default function App() {
       return;
     }
 
+    const endless = match.mode === 'endless';
     let cancelled = false;
     setThinking(true);
 
     const timer = window.setTimeout(() => {
-      requestMove(state.board, state.heights, aiPlayer, match.difficulty, game)
+      requestMove(
+        state.board,
+        state.heights,
+        aiPlayer,
+        endless ? 'hard' : match.difficulty,
+        game,
+        endless ? { ignoreWinFor: human } : undefined,
+      )
         .then((result) => {
-          if (!cancelled && result.col >= 0) dispatch({ type: 'play', col: result.col });
+          if (cancelled || result.col < 0) return;
+          if (endless) {
+            const applied = playEndless(state, result.col, human);
+            if (applied.state === state) return;
+            dispatch({ type: 'advance', state: applied.state });
+            playDrop(aiPlayer, soundOn);
+            if (applied.scrolled) {
+              setEndlessScrolls((count) => count + 1);
+              showEndlessNotice('game.endlessNotice.scrolled');
+            }
+          } else {
+            dispatch({ type: 'play', col: result.col });
+          }
         })
         .catch(() => {
           /* 引擎失败就停在原地，用户可以重开 */
@@ -299,7 +377,18 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [screen, aiPlayer, state, game, match.difficulty, requestMove]);
+  }, [
+    screen,
+    aiPlayer,
+    state,
+    game,
+    match.mode,
+    match.difficulty,
+    human,
+    requestMove,
+    showEndlessNotice,
+    soundOn,
+  ]);
 
   /* ---------- 谜题 AI 防守 ---------- */
   useEffect(() => {
@@ -386,11 +475,14 @@ export default function App() {
       ? nextPuzzle.size
       : nextTutorial
         ? nextTutorial.size
-        : next.size;
+        : next.mode === 'endless' && next.size !== 6 && next.size !== 8
+          ? 6
+          : next.size;
     const nextGame = makeConfig(nextSize, nextPlayers);
 
     setMatch({
       ...next,
+      difficulty: next.mode === 'endless' ? 'hard' : next.difficulty,
       players: nextPlayers,
       size: nextSize,
       puzzleId: nextPuzzle?.id ?? null,
@@ -422,6 +514,10 @@ export default function App() {
     setTutorialStep(0);
     setTutorialReply(null);
     setTutorialFeedback(null);
+    setEndlessMoves(0);
+    setEndlessScrolls(0);
+    setEndlessNewBest(false);
+    setEndlessNotice(null);
     setScreen('game');
   }, []);
 
@@ -435,6 +531,23 @@ export default function App() {
       if (match.mode === 'online') {
         if (state.turn !== online.seat) return;
         online.play(col);
+        return;
+      }
+
+      if (match.mode === 'endless') {
+        const applied = playEndless(state, col, human);
+        if (applied.state === state) return;
+        dispatch({ type: 'advance', state: applied.state });
+        playDrop(state.turn, soundOn);
+        setEndlessMoves((count) => count + 1);
+        if (applied.scrolled) setEndlessScrolls((count) => count + 1);
+        if (applied.ignoredWin && applied.scrolled) {
+          showEndlessNotice('game.endlessNotice.winAndScroll');
+        } else if (applied.ignoredWin) {
+          showEndlessNotice('game.endlessNotice.ignoredWin');
+        } else if (applied.scrolled) {
+          showEndlessNotice('game.endlessNotice.scrolled');
+        }
         return;
       }
 
@@ -474,11 +587,14 @@ export default function App() {
       tutorialReply,
       online.seat,
       online.play,
+      human,
+      showEndlessNotice,
+      soundOn,
     ],
   );
 
   const undo = useCallback(() => {
-    if (match.mode === 'online') return;
+    if (match.mode === 'online' || match.mode === 'endless') return;
     if (thinking || puzzleExhausted || match.mode === 'tutorial') return;
     if (state.status !== 'playing') return;
     const steps = match.mode === 'pve' || match.mode === 'puzzle' ? 2 : 1;
@@ -514,6 +630,10 @@ export default function App() {
     setTutorialStep(0);
     setTutorialReply(null);
     setTutorialFeedback(null);
+    setEndlessMoves(0);
+    setEndlessScrolls(0);
+    setEndlessNewBest(false);
+    setEndlessNotice(null);
   }, [match.mode, online.requestRematch, puzzle, tutorial]);
 
   const swap = useCallback(() => {
@@ -669,6 +789,8 @@ export default function App() {
           onResetStats={resetStats}
           onResetPuzzles={resetPuzzles}
           onResetTutorials={resetTutorials}
+          endlessBest={endlessBest}
+          onResetEndless={resetEndlessBest}
         />
         {settingsOverlay}
       </div>
@@ -700,7 +822,14 @@ export default function App() {
         return state.winner === puzzle.human
           ? t('game.turn.solved')
           : t('game.turn.defended');
+      if (match.mode === 'endless') return t('game.turn.endlessOver');
       return t('game.turn.over');
+    }
+    if (match.mode === 'endless') {
+      if (thinking) return t('game.turn.aiAttacking');
+      return state.turn === aiPlayer
+        ? t('game.turn.aiTurn')
+        : t('game.turn.defend');
     }
     if (match.mode === 'puzzle') {
       if (thinking) return t('game.turn.aiDefending');
@@ -739,20 +868,25 @@ export default function App() {
             cols: game.cols,
             rows: game.rows,
           })
-        : match.mode === 'pve'
-        ? t('game.mode.pve', {
-            difficulty: t(DIFFICULTY_KEYS[match.difficulty]),
-            cols: game.cols,
-            rows: game.rows,
-          })
-        : t('game.mode.pvp', {
-            players: t('menu.playerCount', { count: game.players }),
-            cols: game.cols,
-            rows: game.rows,
-          });
+        : match.mode === 'endless'
+          ? t('game.mode.endless', {
+              cols: game.cols,
+              rows: game.rows,
+            })
+          : match.mode === 'pve'
+            ? t('game.mode.pve', {
+                difficulty: t(DIFFICULTY_KEYS[match.difficulty]),
+                cols: game.cols,
+                rows: game.rows,
+              })
+            : t('game.mode.pvp', {
+                players: t('menu.playerCount', { count: game.players }),
+                cols: game.cols,
+                rows: game.rows,
+              });
 
   const canHint =
-    match.mode === 'online'
+    match.mode === 'online' || match.mode === 'endless'
       ? false
       : match.mode === 'tutorial'
         ? Boolean(tutorial) &&
@@ -856,6 +990,23 @@ export default function App() {
                     : t('game.online.directPath')}
                 </span>
               </div>
+            ) : match.mode === 'endless' ? (
+              <div
+                className="score-inline puzzle-limits"
+                title={t('game.aria.endlessProgress')}
+              >
+                <span>{tp('game.endlessMoves', endlessMoves)}</span>
+                <span className="score-draws">
+                  {endlessBestRecord
+                    ? tp('menu.endlessBest', endlessBestRecord.moves)
+                    : t('menu.endlessBestNone')}
+                </span>
+                {endlessScrolls > 0 && (
+                  <span className="score-draws">
+                    {tp('menu.endlessScrolls', endlessScrolls)}
+                  </span>
+                )}
+              </div>
             ) : tutorial ? (
               <div
                 className="score-inline puzzle-limits"
@@ -958,7 +1109,9 @@ export default function App() {
                 ? t('board.tutorialTitle', { title: text(tutorial.title) })
                 : puzzle
                   ? t('board.puzzleTitle', { title: text(puzzle.title) })
-                  : undefined
+                  : match.mode === 'endless'
+                    ? t('board.endlessTitle')
+                    : undefined
             }
             meta={
               tutorial
@@ -974,7 +1127,12 @@ export default function App() {
                         rows: game.rows,
                         code: online.code ?? '',
                       })
-                    : undefined
+                    : match.mode === 'endless'
+                      ? t('board.endlessMeta', {
+                          cols: game.cols,
+                          rows: game.rows,
+                        })
+                      : undefined
             }
             footer={
               tutorial
@@ -991,7 +1149,9 @@ export default function App() {
                             ? 'board.onlineFooterHost'
                             : 'board.onlineFooterGuest',
                       )
-                    : undefined
+                    : match.mode === 'endless'
+                      ? t('board.endlessFooter')
+                      : undefined
             }
             boardStyle={board.style}
           />
@@ -1016,6 +1176,17 @@ export default function App() {
               exhausted={puzzleExhausted}
               onAgain={restart}
               onNext={startNextPuzzle}
+              onMenu={() => setScreen('menu')}
+            />
+          ) : match.mode === 'endless' ? (
+            <EndlessPanel
+              size={endlessSize}
+              moves={endlessMoves}
+              scrolls={endlessScrolls}
+              best={endlessBestRecord?.moves ?? endlessMoves}
+              newBest={endlessNewBest}
+              visible={resultVisible}
+              onAgain={restart}
               onMenu={() => setScreen('menu')}
             />
           ) : (
@@ -1046,6 +1217,12 @@ export default function App() {
           <p className="puzzle-notice">{t('game.puzzleNoWin')}</p>
         )}
 
+        {endlessNotice && (
+          <p className="puzzle-notice" key={endlessNotice.id}>
+            {t(endlessNotice.key)}
+          </p>
+        )}
+
         <Controls
           onUndo={undo}
           onRestart={restart}
@@ -1057,12 +1234,17 @@ export default function App() {
             !puzzleExhausted &&
             !tutorial &&
             match.mode !== 'online' &&
+            match.mode !== 'endless' &&
             session.past.length > 0 &&
             !thinking
           }
           canHint={canHint}
           hintLoading={hintLoading}
-          showHint={game.players === 2 && match.mode !== 'online'}
+          showHint={
+            game.players === 2 &&
+            match.mode !== 'online' &&
+            match.mode !== 'endless'
+          }
         />
       </main>
       {settingsOverlay}

@@ -134,6 +134,38 @@ describe('chooseMove', () => {
     }
   }, 20_000);
 
+  it('无尽模式下不会为防守方的一手四浪费一步', () => {
+    const board = emptyBoard();
+    for (let r = 0; r < 3; r++) board[r * COLS] = 2;
+    const heights = [3, 0, 0, 0, 0, 0];
+
+    const normal = chooseMove(board, heights, 1, 'normal');
+    expect(normal.col).toBe(0);
+
+    const endless = chooseMove(board, heights, 1, 'normal', undefined, {
+      ignoreWinFor: 2,
+    });
+    expect(endless.col).not.toBe(0);
+  });
+
+  it('无尽模式下 AI 自己的一手胜仍然优先', () => {
+    const board = emptyBoard();
+    board[0] = 1;
+    board[1] = 1;
+    board[2] = 1;
+
+    const result = chooseMove(
+      board,
+      [1, 1, 1, 0, 0, 0],
+      1,
+      'normal',
+      undefined,
+      { ignoreWinFor: 2 },
+    );
+
+    expect(result.col).toBe(3);
+  });
+
   it('满盘返回 -1', () => {
     const board = emptyBoard();
     for (let i = 0; i < CELL_COUNT; i++) board[i] = (i % 2) + 1;

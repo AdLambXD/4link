@@ -49,6 +49,8 @@ interface Engine {
   z2: Int32Array;
   /** 中心优先的走法顺序 */
   order: number[];
+  /** 这个玩家的成线不算胜利（无尽防守模式）；null 表示正常对局 */
+  ignoreWinFor: DuoPlayer | null;
 }
 
 let engine: Engine | null = null;
@@ -105,6 +107,7 @@ function build(config: GameConfig): Engine {
     z1,
     z2,
     order,
+    ignoreWinFor: null,
   };
 }
 
@@ -173,6 +176,8 @@ function winsAt(e: Engine, row: number, col: number, player: DuoPlayer): boolean
 function evaluate(e: Engine, me: DuoPlayer): number {
   const opp = other(me);
   const { board, windows, windowCount, win, cols, heights } = e;
+  const ignoreMe = e.ignoreWinFor === me;
+  const ignoreOpp = e.ignoreWinFor === opp;
   let score = 0;
 
   const strongOne = win >= 5 ? 220 : 150;
@@ -191,13 +196,17 @@ function evaluate(e: Engine, me: DuoPlayer): number {
     }
 
     if (mine === 0) {
-      if (theirs === win - 1) score -= strongBlock;
-      else if (theirs === win - 2) score -= weakBlock;
-      else if (theirs === 1) score -= 1;
+      if (!ignoreOpp) {
+        if (theirs === win - 1) score -= strongBlock;
+        else if (theirs === win - 2) score -= weakBlock;
+        else if (theirs === 1) score -= 1;
+      }
     } else if (theirs === 0) {
-      if (mine === win - 1) score += strongOne;
-      else if (mine === win - 2) score += weakOne;
-      else score += 1;
+      if (!ignoreMe) {
+        if (mine === win - 1) score += strongOne;
+        else if (mine === win - 2) score += weakOne;
+        else score += 1;
+      }
     }
   }
 
@@ -209,7 +218,11 @@ function evaluate(e: Engine, me: DuoPlayer): number {
     if (bonus === 0) continue;
     const h = heights[c];
     for (let r = 0; r < h; r++) {
-      score += board[r * cols + c] === me ? bonus : -bonus;
+      if (board[r * cols + c] === me) {
+        if (!ignoreMe) score += bonus;
+      } else if (!ignoreOpp) {
+        score -= bonus;
+      }
     }
   }
 
@@ -255,7 +268,7 @@ function negamax(
     h2 ^= e.z2[i * 2 + me - 1];
 
     let value: number;
-    if (winsAt(e, r, c, me)) {
+    if (me !== e.ignoreWinFor && winsAt(e, r, c, me)) {
       value = WIN_SCORE - ply;
     } else {
       value = -negamax(e, other(me), depth - 1, -beta, -alpha, ply + 1);
@@ -304,7 +317,7 @@ function rootSearch(e: Engine, me: DuoPlayer, depth: number): RootResult {
     h2 ^= e.z2[i * 2 + me - 1];
 
     let value: number;
-    if (winsAt(e, r, c, me)) {
+    if (me !== e.ignoreWinFor && winsAt(e, r, c, me)) {
       value = WIN_SCORE;
     } else {
       value = -negamax(e, opp, depth - 1, -INF, -alpha, 1);
@@ -338,6 +351,8 @@ function wouldWin(e: Engine, col: number, player: DuoPlayer): boolean {
 
 /** 落下这一手之后，对手是否能立刻连成 win 个 */
 function givesOpponentWin(e: Engine, col: number, player: DuoPlayer): boolean {
+  // 无尽模式下防守方的四连不算胜利，也就不必为了避免它而束手束脚。
+  if (e.ignoreWinFor === other(player)) return false;
   const row = e.heights[col];
   const i = row * e.cols + col;
   e.board[i] = player;
@@ -392,12 +407,18 @@ function resolveConfig(
   return { cols, rows, win: Math.min(win, Math.max(cols, rows)), players: 2 };
 }
 
+export interface MoveOptions {
+  /** 这个玩家的成线不算胜利（无尽防守模式）。 */
+  readonly ignoreWinFor?: DuoPlayer;
+}
+
 export function chooseMove(
   inputBoard: readonly number[],
   inputHeights: readonly number[],
   player: DuoPlayer,
   difficulty: Difficulty,
   inputConfig?: GameConfig,
+  options?: MoveOptions,
 ): MoveResult {
   const started = performance.now();
   const config = resolveConfig(inputBoard, inputHeights, inputConfig);
@@ -405,6 +426,7 @@ export function chooseMove(
   const size = Math.min(e.cols, e.rows);
 
   reset(e, inputBoard, inputHeights);
+  e.ignoreWinFor = options?.ignoreWinFor ?? null;
 
   const legal: number[] = [];
   for (let c = 0; c < e.cols; c++) {
@@ -444,9 +466,10 @@ export function chooseMove(
     return { col, score: 0, depth: 0, nodes: 0, ms: performance.now() - started };
   }
 
-  // 对手下一手能赢就堵
+  // 对手下一手能赢就堵；无尽模式下防守方的四连不算胜利，跳过这一步。
   const opp = other(player);
-  const threat = legal.find((c) => wouldWin(e, c, opp));
+  const threat =
+    opp === e.ignoreWinFor ? undefined : legal.find((c) => wouldWin(e, c, opp));
   if (threat !== undefined) {
     // 简单档偶尔漏看对手的一步胜，故意走出无法封堵的着法。
     if (difficulty === 'easy' && Math.random() < 0.4) {
