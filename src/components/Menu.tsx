@@ -457,7 +457,7 @@ export function Menu({
         </section>
       )}
 
-      {(mode === 'pve' || mode === 'endless') && (
+      {mode === 'pve' && (
         <section className="block">
           <div className="block-head">
             <span className="block-num">{num()}</span>

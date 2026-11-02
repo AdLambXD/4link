@@ -353,7 +353,7 @@ export const zhCN = {
   /* ---------- 无尽模式 ---------- */
   'menu.mode.endless': '无尽模式',
   'menu.endlessHeading': '无尽模式',
-  'menu.endlessRule': '你连成四子不算胜利；挡住 AI，撑得越久越好。',
+  'menu.endlessRule': 'AI 固定先手。你连成四子不算胜利；挡住它，撑得越久越好。',
   'menu.endlessBest': {
     one: '最佳 {count} 手',
     other: '最佳 {count} 手',
@@ -364,7 +364,8 @@ export const zhCN = {
     other: '上移 {count} 次',
   },
   'menu.startEndless': '开始防守',
-  'menu.notes.endless1': '你执防守方：AI 持续进攻，你连成四子也不算胜利。',
+  'menu.notes.endless1':
+    'AI 固定先手并持续进攻；你执防守方，连成四子也不算胜利。',
   'menu.notes.endless2': '棋盘填满后整体上移一行，顶行棋子被移出，对局继续。',
   'menu.notes.endless3':
     '被 AI 连成四子时本局结束；按你落下的手数计分，最佳记录保存在本机。',
@@ -773,7 +774,7 @@ export const zhTW = {
   /* ---------- 無盡模式 ---------- */
   'menu.mode.endless': '無盡模式',
   'menu.endlessHeading': '無盡模式',
-  'menu.endlessRule': '你連成四子不算勝利；擋住 AI，撐得越久越好。',
+  'menu.endlessRule': 'AI 固定先手。你連成四子不算勝利；擋住它，撐得越久越好。',
   'menu.endlessBest': {
     one: '最佳 {count} 手',
     other: '最佳 {count} 手',
@@ -784,7 +785,8 @@ export const zhTW = {
     other: '上移 {count} 次',
   },
   'menu.startEndless': '開始防守',
-  'menu.notes.endless1': '你執防守方：AI 持續進攻，你連成四子也不算勝利。',
+  'menu.notes.endless1':
+    'AI 固定先手並持續進攻；你執防守方，連成四子也不算勝利。',
   'menu.notes.endless2': '棋盤填滿後整體上移一行，頂行棋子被移出，對局繼續。',
   'menu.notes.endless3':
     '被 AI 連成四子時本局結束；按你落下的手數計分，最佳記錄保存在本機。',
@@ -1193,7 +1195,7 @@ export const en = {
   'menu.mode.endless': 'Endless',
   'menu.endlessHeading': 'Endless mode',
   'menu.endlessRule':
-    'Your fours do not win. Block the AI and survive as long as you can.',
+    'The AI always moves first. Your fours do not win; block it and survive as long as you can.',
   'menu.endlessBest': {
     one: 'Best: {count} move',
     other: 'Best: {count} moves',
@@ -1205,7 +1207,7 @@ export const en = {
   },
   'menu.startEndless': 'Start defending',
   'menu.notes.endless1':
-    'You defend: the AI keeps attacking, and your own fours never win.',
+    'The AI always moves first and keeps attacking. You defend, and your own fours never win.',
   'menu.notes.endless2':
     'When the board fills, it scrolls up one row and the top row leaves; play continues.',
   'menu.notes.endless3':

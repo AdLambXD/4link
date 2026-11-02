@@ -141,7 +141,9 @@ export default function App() {
   const tutorialComplete = tutorial
     ? isTutorialComplete(tutorial, state, tutorialStep)
     : false;
-  const human: DuoPlayer = match.humanFirst ? 1 : 2;
+  // 无尽模式固定 AI 先手，玩家永远执防守方。
+  const human: DuoPlayer =
+    match.mode === 'endless' ? 2 : match.humanFirst ? 1 : 2;
   const aiPlayer: DuoPlayer | null =
     match.mode === 'pve' || match.mode === 'endless'
       ? human === 1
