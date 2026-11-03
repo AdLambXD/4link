@@ -19,11 +19,17 @@ function placeholders(value: string): string[] {
 }
 
 function forms(value: MessageValue): string[] {
-  return typeof value === 'string' ? [value] : [value.one, value.other];
+  return typeof value === 'string'
+    ? [value]
+    : Object.values(value).filter((form): form is string => Boolean(form));
+}
+
+function uniquePlaceholders(value: MessageValue): string[] {
+  return [...new Set(forms(value).flatMap(placeholders))].sort();
 }
 
 describe('多语言字典', () => {
-  it('三种语言的键完全一致，且每条文案都不为空', () => {
+  it('十种语言的键完全一致，且每条文案都不为空', () => {
     const keys = Object.keys(zhCN).sort();
     for (const locale of LOCALES) {
       const dictionary = DICTIONARIES[locale];
@@ -38,12 +44,10 @@ describe('多语言字典', () => {
 
   it('每种语言的占位符与原语言一致', () => {
     for (const key of Object.keys(zhCN) as Array<keyof typeof zhCN>) {
-      const source = forms(zhCN[key]);
+      const expected = uniquePlaceholders(zhCN[key]);
       for (const locale of LOCALES) {
-        const target = forms(DICTIONARIES[locale][key]);
-        expect(target.map(placeholders), `${locale} ${key}`).toEqual(
-          source.map(placeholders),
-        );
+        const target = DICTIONARIES[locale][key];
+        expect(uniquePlaceholders(target), `${locale} ${key}`).toEqual(expected);
       }
     }
   });
@@ -64,7 +68,7 @@ describe('多语言字典', () => {
     expect(translatePlural('en', 'puzzle.hints', 2)).toBe('Used 2 hints');
   });
 
-  it('残局和教程内容在三种语言下都写齐了', () => {
+  it('残局和教程内容在十种语言下都写齐了', () => {
     for (const puzzle of PUZZLES) {
       for (const locale of LOCALES) {
         expect(pickText(puzzle.title, locale).trim().length).toBeGreaterThan(0);
@@ -98,15 +102,22 @@ describe('语言选择', () => {
     expect(detectLocale(['zh-HK'])).toBe('zh-TW');
     expect(detectLocale(['zh-Hant'])).toBe('zh-TW');
     expect(detectLocale(['en-GB'])).toBe('en');
-    expect(detectLocale(['ja-JP'])).toBe('en');
-    expect(detectLocale(['ja-JP', 'zh-TW'])).toBe('zh-TW');
+    expect(detectLocale(['ja-JP'])).toBe('ja');
+    expect(detectLocale(['es-419'])).toBe('es');
+    expect(detectLocale(['fr-CA'])).toBe('fr');
+    expect(detectLocale(['de-AT'])).toBe('de');
+    expect(detectLocale(['ru-RU'])).toBe('ru');
+    expect(detectLocale(['hi-IN'])).toBe('hi');
+    expect(detectLocale(['ar-EG'])).toBe('ar');
+    expect(detectLocale(['ja-JP', 'zh-TW'])).toBe('ja');
     expect(detectLocale([])).toBe('en');
   });
 
   it('合法的手动选择优先，非法值回退到浏览器语言', () => {
     expect(resolveLocale('en', ['zh-CN'])).toBe('en');
     expect(resolveLocale('zh-TW', ['en-US'])).toBe('zh-TW');
-    expect(resolveLocale('fr', ['zh-TW'])).toBe('zh-TW');
+    expect(resolveLocale('fr', ['zh-TW'])).toBe('fr');
+    expect(resolveLocale('ru', ['en-US'])).toBe('ru');
     expect(resolveLocale(null, ['en-US'])).toBe('en');
     expect(resolveLocale('', [])).toBe('en');
   });

@@ -11,6 +11,7 @@ import { Settings } from './components/Settings';
 import { TutorialCoach } from './components/TutorialCoach';
 import { TutorialPanel } from './components/TutorialPanel';
 import { isEndlessOver, playEndless } from './game/endless';
+import { playRotation } from './game/rotation';
 import {
   PUZZLES,
   createPuzzleState,
@@ -55,6 +56,7 @@ const DIFFICULTY_KEYS: Record<Difficulty, StringKey> = {
 
 const DEFAULT_CONFIG: MatchConfig = {
   mode: 'pve',
+  opponent: 'ai',
   difficulty: 'normal',
   humanFirst: true,
   players: 2,
@@ -97,6 +99,11 @@ export default function App() {
   const [endlessScrolls, setEndlessScrolls] = useState(0);
   const [endlessNewBest, setEndlessNewBest] = useState(false);
   const [endlessNotice, setEndlessNotice] = useState<{
+    key: StringKey;
+    id: number;
+  } | null>(null);
+  const [rotationTurns, setRotationTurns] = useState(0);
+  const [rotationNotice, setRotationNotice] = useState<{
     key: StringKey;
     id: number;
   } | null>(null);
@@ -144,8 +151,11 @@ export default function App() {
   // 无尽模式固定 AI 先手，玩家永远执防守方。
   const human: DuoPlayer =
     match.mode === 'endless' ? 2 : match.humanFirst ? 1 : 2;
+  const rotationLocal = match.mode === 'rotation' && match.opponent === 'local';
   const aiPlayer: DuoPlayer | null =
-    match.mode === 'pve' || match.mode === 'endless'
+    match.mode === 'pve' ||
+    match.mode === 'endless' ||
+    (match.mode === 'rotation' && !rotationLocal)
       ? human === 1
         ? 2
         : 1
@@ -165,11 +175,21 @@ export default function App() {
     setEndlessNotice({ key, id: Date.now() });
   }, []);
 
+  const showRotationNotice = useCallback((key: StringKey) => {
+    setRotationNotice({ key, id: Date.now() });
+  }, []);
+
   useEffect(() => {
     if (endlessNotice === null) return;
     const timer = window.setTimeout(() => setEndlessNotice(null), 2200);
     return () => window.clearTimeout(timer);
   }, [endlessNotice]);
+
+  useEffect(() => {
+    if (rotationNotice === null) return;
+    const timer = window.setTimeout(() => setRotationNotice(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [rotationNotice]);
 
   /* ---------- 联机 ---------- */
   const screenRef = useRef(screen);
@@ -340,6 +360,7 @@ export default function App() {
     }
 
     const endless = match.mode === 'endless';
+    const rotation = match.mode === 'rotation';
     let cancelled = false;
     setThinking(true);
 
@@ -350,11 +371,24 @@ export default function App() {
         aiPlayer,
         endless ? 'hard' : match.difficulty,
         game,
-        endless ? { ignoreWinFor: human } : undefined,
+        rotation
+          ? { rotation: true }
+          : endless
+            ? { ignoreWinFor: human }
+            : undefined,
       )
         .then((result) => {
           if (cancelled || result.col < 0) return;
-          if (endless) {
+          if (rotation) {
+            const applied = playRotation(state, result.col);
+            if (applied.state === state) return;
+            dispatch({ type: 'step', state: applied.state });
+            playDrop(aiPlayer, soundOn);
+            if (applied.rotated) {
+              setRotationTurns((count) => count + 1);
+              showRotationNotice('game.rotationNotice.rotated');
+            }
+          } else if (endless) {
             const applied = playEndless(state, result.col, human);
             if (applied.state === state) return;
             dispatch({ type: 'advance', state: applied.state });
@@ -389,6 +423,7 @@ export default function App() {
     human,
     requestMove,
     showEndlessNotice,
+    showRotationNotice,
     soundOn,
   ]);
 
@@ -479,7 +514,9 @@ export default function App() {
         ? nextTutorial.size
         : next.mode === 'endless' && next.size !== 6 && next.size !== 8
           ? 6
-          : next.size;
+          : next.mode === 'rotation' && next.size !== 6 && next.size !== 8
+            ? 6
+            : next.size;
     const nextGame = makeConfig(nextSize, nextPlayers);
 
     setMatch({
@@ -520,6 +557,8 @@ export default function App() {
     setEndlessScrolls(0);
     setEndlessNewBest(false);
     setEndlessNotice(null);
+    setRotationTurns(0);
+    setRotationNotice(null);
     setScreen('game');
   }, []);
 
@@ -549,6 +588,18 @@ export default function App() {
           showEndlessNotice('game.endlessNotice.ignoredWin');
         } else if (applied.scrolled) {
           showEndlessNotice('game.endlessNotice.scrolled');
+        }
+        return;
+      }
+
+      if (match.mode === 'rotation') {
+        const applied = playRotation(state, col);
+        if (applied.state === state) return;
+        dispatch({ type: 'step', state: applied.state });
+        playDrop(state.turn, soundOn);
+        if (applied.rotated) {
+          setRotationTurns((count) => count + 1);
+          showRotationNotice('game.rotationNotice.rotated');
         }
         return;
       }
@@ -591,6 +642,7 @@ export default function App() {
       online.play,
       human,
       showEndlessNotice,
+      showRotationNotice,
       soundOn,
     ],
   );
@@ -599,10 +651,20 @@ export default function App() {
     if (match.mode === 'online' || match.mode === 'endless') return;
     if (thinking || puzzleExhausted || match.mode === 'tutorial') return;
     if (state.status !== 'playing') return;
-    const steps = match.mode === 'pve' || match.mode === 'puzzle' ? 2 : 1;
+    const steps =
+      match.mode === 'pve' || match.mode === 'puzzle'
+        ? 2
+        : match.mode === 'rotation'
+          ? rotationLocal
+            ? 1
+            : 2
+          : 1;
     setPuzzleNoWin(false);
+    if (match.mode === 'rotation') {
+      setRotationTurns((count) => Math.max(0, count - steps));
+    }
     dispatch({ type: 'undo', steps });
-  }, [thinking, state.status, match.mode, puzzleExhausted]);
+  }, [thinking, state.status, match.mode, puzzleExhausted, rotationLocal]);
 
   const restart = useCallback(() => {
     if (match.mode === 'online') {
@@ -636,10 +698,17 @@ export default function App() {
     setEndlessScrolls(0);
     setEndlessNewBest(false);
     setEndlessNotice(null);
+    setRotationTurns(0);
+    setRotationNotice(null);
   }, [match.mode, online.requestRematch, puzzle, tutorial]);
 
   const swap = useCallback(() => {
-    if (match.mode !== 'pve') return;
+    if (
+      match.mode !== 'pve' &&
+      !(match.mode === 'rotation' && match.opponent === 'ai')
+    ) {
+      return;
+    }
     setMatch((prev) => ({ ...prev, humanFirst: !prev.humanFirst }));
     dispatch({ type: 'reset' });
     recordedRef.current = false;
@@ -647,7 +716,9 @@ export default function App() {
     setHint(null);
     setThinking(false);
     setResultVisible(false);
-  }, [match.mode]);
+    setRotationTurns(0);
+    setRotationNotice(null);
+  }, [match.mode, match.opponent]);
 
   const askHint = useCallback(async () => {
     if (match.mode === 'online') return;
@@ -690,6 +761,7 @@ export default function App() {
         state.turn as DuoPlayer,
         'hard',
         game,
+        match.mode === 'rotation' ? { rotation: true } : undefined,
       );
       if (result.col >= 0) setHint(result.col);
     } catch {
@@ -839,8 +911,13 @@ export default function App() {
         ? t('game.turn.yours')
         : t('game.turn.aiTurn');
     }
-    if (match.mode === 'pve') {
+    if (match.mode === 'pve' || match.mode === 'rotation') {
       if (thinking) return t('game.turn.aiThinking');
+      if (match.mode === 'rotation' && rotationLocal) {
+        return state.turn === 1
+          ? t('game.turn.first')
+          : t('game.turn.second');
+      }
       return state.turn === aiPlayer
         ? t('game.turn.aiTurn')
         : t('game.turn.yours');
@@ -875,7 +952,12 @@ export default function App() {
               cols: game.cols,
               rows: game.rows,
             })
-          : match.mode === 'pve'
+          : match.mode === 'rotation'
+            ? t('game.mode.rotation', {
+                cols: game.cols,
+                rows: game.rows,
+              })
+            : match.mode === 'pve'
             ? t('game.mode.pve', {
                 difficulty: t(DIFFICULTY_KEYS[match.difficulty]),
                 cols: game.cols,
@@ -1009,6 +1091,13 @@ export default function App() {
                   </span>
                 )}
               </div>
+            ) : match.mode === 'rotation' ? (
+              <div
+                className="score-inline puzzle-limits"
+                title={t('game.aria.rotationProgress')}
+              >
+                <span>{tp('game.rotationTurns', rotationTurns)}</span>
+              </div>
             ) : tutorial ? (
               <div
                 className="score-inline puzzle-limits"
@@ -1113,7 +1202,9 @@ export default function App() {
                   ? t('board.puzzleTitle', { title: text(puzzle.title) })
                   : match.mode === 'endless'
                     ? t('board.endlessTitle')
-                    : undefined
+                    : match.mode === 'rotation'
+                      ? t('board.rotationTitle')
+                      : undefined
             }
             meta={
               tutorial
@@ -1134,7 +1225,12 @@ export default function App() {
                           cols: game.cols,
                           rows: game.rows,
                         })
-                      : undefined
+                      : match.mode === 'rotation'
+                        ? t('board.rotationMeta', {
+                            cols: game.cols,
+                            rows: game.rows,
+                          })
+                        : undefined
             }
             footer={
               tutorial
@@ -1153,9 +1249,12 @@ export default function App() {
                       )
                     : match.mode === 'endless'
                       ? t('board.endlessFooter')
-                      : undefined
+                      : match.mode === 'rotation'
+                        ? t('board.rotationFooter')
+                        : undefined
             }
             boardStyle={board.style}
+            rotationPulse={rotationNotice?.id ?? null}
           />
           {tutorial ? (
             <TutorialPanel
@@ -1199,7 +1298,14 @@ export default function App() {
                   ? 'pvp'
                   : match.mode === 'online'
                     ? 'online'
-                    : 'pve'
+                    : match.mode === 'rotation' && rotationLocal
+                      ? 'pvp'
+                      : 'pve'
+              }
+              note={
+                match.mode === 'rotation' && rotationTurns > 0
+                  ? tp('result.rotations', rotationTurns)
+                  : undefined
               }
               seat={online.seat}
               rematchPending={online.rematchMine}
@@ -1222,6 +1328,12 @@ export default function App() {
         {endlessNotice && (
           <p className="puzzle-notice" key={endlessNotice.id}>
             {t(endlessNotice.key)}
+          </p>
+        )}
+
+        {rotationNotice && (
+          <p className="puzzle-notice rotation-notice" key={rotationNotice.id}>
+            {t(rotationNotice.key)}
           </p>
         )}
 

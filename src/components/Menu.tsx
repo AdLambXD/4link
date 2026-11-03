@@ -23,7 +23,16 @@ import { LanguageSwitch } from './LanguageSwitch';
 import { OnlinePanel, type OnlinePanelProps } from './OnlinePanel';
 
 export interface MatchConfig {
-  mode: 'pvp' | 'pve' | 'endless' | 'puzzle' | 'tutorial' | 'online';
+  mode:
+    | 'pvp'
+    | 'pve'
+    | 'endless'
+    | 'rotation'
+    | 'puzzle'
+    | 'tutorial'
+    | 'online';
+  /** 旋转模式的对战对象；其他模式忽略。 */
+  opponent: 'ai' | 'local';
   difficulty: Difficulty;
   humanFirst: boolean;
   players: number;
@@ -101,6 +110,7 @@ export function Menu({
   );
   const [difficulty, setDifficulty] = useState<Difficulty>(initial.difficulty);
   const [humanFirst, setHumanFirst] = useState(initial.humanFirst);
+  const [opponent, setOpponent] = useState<'ai' | 'local'>(initial.opponent);
   const [players, setPlayers] = useState(initial.players);
   const [size, setSize] = useState<BoardSize>(initial.size);
   const [puzzleId, setPuzzleId] = useState(() => getPuzzle(initial.puzzleId)?.id ?? firstUnsolved.id);
@@ -136,6 +146,7 @@ export function Menu({
     if (mode === 'online') return;
     onStart({
       mode,
+      opponent,
       difficulty: mode === 'endless' ? 'hard' : difficulty,
       humanFirst,
       players: mode === 'pvp' ? players : 2,
@@ -144,7 +155,11 @@ export function Menu({
           ? selectedPuzzle.size
           : mode === 'tutorial'
             ? selectedTutorial.size
-            : size,
+            : mode === 'endless' || mode === 'rotation'
+              ? size === 8
+                ? 8
+                : 6
+              : size,
       puzzleId: mode === 'puzzle' ? selectedPuzzle.id : null,
       tutorialId: mode === 'tutorial' ? selectedTutorial.id : null,
     });
@@ -204,6 +219,16 @@ export function Menu({
           >
             <span className="choice-main">{t('menu.mode.pvp')}</span>
             <span className="choice-note">LOCAL</span>
+          </button>
+          <button
+            className={`choice choice-compact choice-mode${mode === 'rotation' ? ' is-on' : ''}`}
+            onClick={() => {
+              setMode('rotation');
+              if (size !== 6 && size !== 8) setSize(6);
+            }}
+          >
+            <span className="choice-main">{t('menu.mode.rotation')}</span>
+            <span className="choice-note">ROTATE</span>
           </button>
           <button
             className={`choice choice-compact choice-mode${mode === 'tutorial' ? ' is-on' : ''}`}
@@ -371,6 +396,89 @@ export function Menu({
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {mode === 'rotation' && (
+        <section className="block">
+          <div className="block-head">
+            <span className="block-num">{num()}</span>
+            <h2>{t('menu.rotationHeading')}</h2>
+            <span className="puzzle-head-meta">
+              <span className="puzzle-count">ROTATE · 90°</span>
+            </span>
+          </div>
+          <p className="puzzle-brief">{t('menu.rotationRule')}</p>
+
+          <div className="choices choices-2">
+            <button
+              className={`choice choice-compact${opponent === 'ai' ? ' is-on' : ''}`}
+              onClick={() => setOpponent('ai')}
+            >
+              <span className="choice-main">{t('menu.rotationVsAi')}</span>
+              <span className="choice-note">SOLO</span>
+            </button>
+            <button
+              className={`choice choice-compact${opponent === 'local' ? ' is-on' : ''}`}
+              onClick={() => setOpponent('local')}
+            >
+              <span className="choice-main">{t('menu.rotationVsLocal')}</span>
+              <span className="choice-note">LOCAL</span>
+            </button>
+          </div>
+
+          <div className="choices choices-2">
+            {([6, 8] as const).map((boardSize) => (
+              <button
+                key={boardSize}
+                className={`choice choice-compact${size === boardSize ? ' is-on' : ''}`}
+                onClick={() => setSize(boardSize)}
+              >
+                <span className="choice-main">
+                  {boardSize} × {boardSize}
+                </span>
+                <span className="choice-note">
+                  {t('menu.connect', { count: SIZE_WIN[boardSize] })}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {opponent === 'ai' && (
+            <>
+              <div className="choices choices-3">
+                {(['easy', 'normal', 'hard'] as const).map((level) => (
+                  <button
+                    key={level}
+                    className={`choice${difficulty === level ? ' is-on' : ''}`}
+                    onClick={() => setDifficulty(level)}
+                  >
+                    <span className="choice-main">
+                      {t(DIFFICULTY_KEYS[level])}
+                    </span>
+                    <span className="choice-note">{level.toUpperCase()}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="choices choices-2">
+                <button
+                  className={`choice${humanFirst ? ' is-on' : ''}`}
+                  onClick={() => setHumanFirst(true)}
+                >
+                  <span className="choice-main">{t('menu.firstMe')}</span>
+                  <span className="choice-note">FIRST</span>
+                </button>
+                <button
+                  className={`choice${!humanFirst ? ' is-on' : ''}`}
+                  onClick={() => setHumanFirst(false)}
+                >
+                  <span className="choice-main">{t('menu.firstAi')}</span>
+                  <span className="choice-note">SECOND</span>
+                </button>
+              </div>
+            </>
+          )}
         </section>
       )}
 
@@ -560,9 +668,11 @@ export function Menu({
               ? t('menu.startPuzzle')
               : mode === 'endless'
                 ? t('menu.startEndless')
-                : mode === 'tutorial'
-                  ? t('menu.startTutorial')
-                  : t('menu.startMatch')}
+                : mode === 'rotation'
+                  ? t('menu.startRotation')
+                  : mode === 'tutorial'
+                    ? t('menu.startTutorial')
+                    : t('menu.startMatch')}
           </span>
           <ArrowRightIcon />
         </button>
@@ -635,6 +745,18 @@ export function Menu({
               : tp('menu.bestMoves', bestSolved)}
           </span>
         </div>
+      ) : mode === 'rotation' ? (
+        <div className="scorecard">
+          <span className="scorecard-title">{t('menu.rotationHeading')}</span>
+          <span className="score-item">
+            {size} × {size} · {t('menu.connect', { count: SIZE_WIN[size] })}
+          </span>
+          <span className="score-draw">
+            {opponent === 'ai'
+              ? t(DIFFICULTY_KEYS[difficulty])
+              : t('menu.rotationVsLocal')}
+          </span>
+        </div>
       ) : (
         <div className="scorecard">
           <span className="scorecard-title">{t('menu.record')}</span>
@@ -684,6 +806,13 @@ export function Menu({
               <li>{t('menu.notes.online2')}</li>
               <li>{t('menu.notes.online3')}</li>
               <li>{t('menu.notes.online4')}</li>
+            </>
+          ) : mode === 'rotation' ? (
+            <>
+              <li>{t('menu.notes.rotation1')}</li>
+              <li>{t('menu.notes.rotation2')}</li>
+              <li>{t('menu.notes.rotation3')}</li>
+              <li>{t('menu.notes.rotation4')}</li>
             </>
           ) : (
             <>

@@ -20,7 +20,18 @@ export interface Skin {
 export const SKINS = [
   {
     id: 'washi',
-    name: lt('和纸', '和紙', 'Washi'),
+    name: lt(
+      '和纸',
+      '和紙',
+      'Washi',
+      '和紙',
+      'Washi',
+      'Washi',
+      'Washi',
+      'Васи',
+      'वाशी',
+      'واشي',
+    ),
     note: 'WASHI',
     scheme: 'light',
     vars: {
@@ -53,7 +64,18 @@ export const SKINS = [
   },
   {
     id: 'kaya',
-    name: lt('榧木', '榧木', 'Kaya'),
+    name: lt(
+      '榧木',
+      '榧木',
+      'Kaya',
+      '榧',
+      'Kaya',
+      'Kaya',
+      'Kaya',
+      'Кайя',
+      'काया',
+      'كايا',
+    ),
     note: 'KAYA',
     scheme: 'light',
     vars: {
@@ -86,7 +108,18 @@ export const SKINS = [
   },
   {
     id: 'celadon',
-    name: lt('青瓷', '青瓷', 'Celadon'),
+    name: lt(
+      '青瓷',
+      '青瓷',
+      'Celadon',
+      '青磁',
+      'Celadón',
+      'Céladon',
+      'Seladon',
+      'Селадон',
+      'सेलाडॉन',
+      'سيلادون',
+    ),
     note: 'CELADON',
     scheme: 'light',
     vars: {
@@ -119,7 +152,18 @@ export const SKINS = [
   },
   {
     id: 'indigo',
-    name: lt('蓝染', '藍染', 'Indigo'),
+    name: lt(
+      '蓝染',
+      '藍染',
+      'Indigo',
+      '藍染め',
+      'Índigo',
+      'Indigo',
+      'Indigo',
+      'Индиго',
+      'इंडिगो',
+      'نيلي',
+    ),
     note: 'INDIGO',
     scheme: 'dark',
     vars: {

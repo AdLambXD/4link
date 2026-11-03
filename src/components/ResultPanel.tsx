@@ -10,6 +10,8 @@ interface ResultPanelProps {
   seat?: Seat | null;
   /** 联机模式下已经发出「再来一局」。 */
   rematchPending?: boolean;
+  /** 额外说明，例如旋转模式的旋转次数。 */
+  note?: string;
   visible: boolean;
   onAgain: () => void;
   onSwap: () => void;
@@ -22,6 +24,7 @@ export function ResultPanel({
   humanFirst,
   seat = null,
   rematchPending = false,
+  note,
   visible,
   onAgain,
   onSwap,
@@ -76,6 +79,7 @@ export function ResultPanel({
           {mode === 'online' && rematchPending && (
             <p className="slip-note">{t('result.rematchPending')}</p>
           )}
+          {note && <p className="slip-note">{note}</p>}
         </div>
 
         <div className="slip-actions">

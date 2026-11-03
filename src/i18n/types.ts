@@ -1,4 +1,15 @@
-export const LOCALES = ['zh-CN', 'zh-TW', 'en'] as const;
+export const LOCALES = [
+  'zh-CN',
+  'zh-TW',
+  'en',
+  'ja',
+  'es',
+  'fr',
+  'de',
+  'ru',
+  'hi',
+  'ar',
+] as const;
 
 export type Locale = (typeof LOCALES)[number];
 
@@ -13,9 +24,34 @@ export function isLocale(value: unknown): value is Locale {
   );
 }
 
-/** 紧凑地写一段多语言文本：lt(简中, 繁中, 英文)。 */
-export function lt(zhCN: string, zhTW: string, en: string): LocalizedText {
-  return { 'zh-CN': zhCN, 'zh-TW': zhTW, en };
+/**
+ * 紧凑地写一段多语言文本：
+ * lt(简中, 繁中, 英文, 日文, 西班牙文, 法文, 德文, 俄文, 印地文, 阿拉伯文)
+ */
+export function lt(
+  zhCN: string,
+  zhTW: string,
+  en: string,
+  ja: string,
+  es: string,
+  fr: string,
+  de: string,
+  ru: string,
+  hi: string,
+  ar: string,
+): LocalizedText {
+  return {
+    'zh-CN': zhCN,
+    'zh-TW': zhTW,
+    en,
+    ja,
+    es,
+    fr,
+    de,
+    ru,
+    hi,
+    ar,
+  };
 }
 
 export function pickText(value: LocalizedText, locale: Locale): string {

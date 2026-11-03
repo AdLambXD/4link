@@ -38,6 +38,10 @@ function pluralCategory(locale: Locale, count: number): Intl.LDMLPluralRule {
   return rules.select(count);
 }
 
+/**
+ * 复数文案：按 Intl.PluralRules 选择 zero / one / two / few / many / other。
+ * 缺少当前类别时回退到 other，再回退到 one，避免俄语、阿拉伯语漏填时报错。
+ */
 export function translatePlural(
   locale: Locale,
   key: PluralKey,
@@ -49,25 +53,49 @@ export function translatePlural(
   if (typeof value === 'string') {
     return interpolate(value, { ...params, count });
   }
-  const form = pluralCategory(locale, count) === 'one' ? value.one : value.other;
-  return interpolate(form, { ...params, count });
+  const forms = value as Readonly<Record<string, string | undefined>>;
+  const category = pluralCategory(locale, count);
+  const template = forms[category] ?? forms.other ?? forms.one ?? '';
+  return interpolate(template, { ...params, count });
 }
 
-/** 把 zh-Hant / zh-TW / zh-HK 之类归到对应中文变体。 */
+/** 把浏览器语言标签归到支持的语言；未匹配返回 null。 */
 function localeForTag(tag: string): Locale | null {
   const normalized = tag.trim().toLowerCase().replace(/_/g, '-');
   if (!normalized) return null;
+
+  // 中文需要先区分繁体，再统一到简体。
   if (
     normalized.startsWith('zh-hant') ||
-    normalized === 'zh-tw' ||
-    normalized === 'zh-hk' ||
-    normalized === 'zh-mo'
+    normalized.startsWith('zh-tw') ||
+    normalized.startsWith('zh-hk') ||
+    normalized.startsWith('zh-mo')
   ) {
     return 'zh-TW';
   }
   if (normalized.startsWith('zh')) return 'zh-CN';
-  if (normalized.startsWith('en')) return 'en';
-  return null;
+
+  const prefix = normalized.split('-')[0];
+  switch (prefix) {
+    case 'en':
+      return 'en';
+    case 'ja':
+      return 'ja';
+    case 'es':
+      return 'es';
+    case 'fr':
+      return 'fr';
+    case 'de':
+      return 'de';
+    case 'ru':
+      return 'ru';
+    case 'hi':
+      return 'hi';
+    case 'ar':
+      return 'ar';
+    default:
+      return null;
+  }
 }
 
 /** 依次查看浏览器语言列表，取第一个能支持的语言；都不支持时用英文。 */

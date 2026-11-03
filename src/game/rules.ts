@@ -271,7 +271,9 @@ export type SessionAction =
   /** 载入一个预设局面（残局谜题），清空悔棋历史。 */
   | { type: 'load'; state: GameState }
   /** 写入经过模式规则处理后的局面（无尽模式的上移 / 忽略玩家四连）。 */
-  | { type: 'advance'; state: GameState };
+  | { type: 'advance'; state: GameState }
+  /** 写入旋转后的局面，保留完整悔棋历史。 */
+  | { type: 'step'; state: GameState };
 
 export function sessionReducer(state: Session, action: SessionAction): Session {
   switch (action.type) {
@@ -299,6 +301,13 @@ export function sessionReducer(state: Session, action: SessionAction): Session {
       return {
         current: action.state,
         past: [...state.past, state.current].slice(-2),
+      };
+    }
+    case 'step': {
+      if (action.state === state.current) return state;
+      return {
+        current: action.state,
+        past: [...state.past, state.current],
       };
     }
   }

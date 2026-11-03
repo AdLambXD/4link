@@ -229,6 +229,23 @@ function evaluate(e: Engine, me: DuoPlayer): number {
   return score;
 }
 
+/**
+ * 只读的静态评估：给旋转模式等特殊规则复用同一套窗口评分。
+ * 会重置共享引擎的棋盘，因此不要在 negamax 搜索中途调用。
+ */
+export function staticScore(
+  board: readonly number[],
+  heights: readonly number[],
+  config: GameConfig,
+  me: DuoPlayer,
+): number {
+  const e = getEngine(config);
+  for (let i = 0; i < e.cellCount; i++) e.board[i] = board[i] | 0;
+  for (let c = 0; c < e.cols; c++) e.heights[c] = heights[c] | 0;
+  e.ignoreWinFor = null;
+  return evaluate(e, me);
+}
+
 function negamax(
   e: Engine,
   me: DuoPlayer,
@@ -410,6 +427,8 @@ function resolveConfig(
 export interface MoveOptions {
   /** 这个玩家的成线不算胜利（无尽防守模式）。 */
   readonly ignoreWinFor?: DuoPlayer;
+  /** 使用旋转模式的搜索：每手落子后旋转 + 塌落。 */
+  readonly rotation?: boolean;
 }
 
 export function chooseMove(

@@ -16,6 +16,8 @@ interface BoardProps {
   footer?: string;
   /** 格线样式：规整或手绘。 */
   boardStyle?: BoardStyle;
+  /** 旋转模式每次旋转时变化的时间戳；变化即播放提示动画。 */
+  rotationPulse?: number | null;
 }
 
 /** 星位：按棋盘大小取靠边的四个点，偶数盘不强行放中心。 */
@@ -161,6 +163,7 @@ export function Board({
   meta,
   footer,
   boardStyle = 'clean',
+  rotationPulse = null,
 }: BoardProps) {
   const { t } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
@@ -210,6 +213,12 @@ export function Board({
           onMouseLeave={() => setHover(null)}
         >
           <div className="board-veil" aria-hidden="true" />
+
+          {rotationPulse !== null && (
+            <div className="rotation-flash" key={rotationPulse} aria-hidden="true">
+              <span className="rotation-arrow">↻</span>
+            </div>
+          )}
 
           <svg
             className="board-lines"

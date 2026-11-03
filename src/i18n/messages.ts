@@ -2,9 +2,20 @@
  * 界面文案字典。
  *
  * zh-CN 是源语言：其它语言的键必须与它完全一致，缺一条 tsc 就会报错。
- * `{name}` 形式的占位符由 t()/tp() 插值；带 one/other 的条目由 tp() 按
- * Intl.PluralRules 选择形式（中文永远走 other）。
+ * `{name}` 形式的占位符由 t()/tp() 插值；复数条目由 tp() 按
+ * Intl.PluralRules 选择形式（不同语言可提供 zero/two/few/many）。
  */
+import { ar } from './locales/ar';
+import { de } from './locales/de';
+import { es } from './locales/es';
+import { fr } from './locales/fr';
+import { hi } from './locales/hi';
+import { ja } from './locales/ja';
+import { ru } from './locales/ru';
+import type { Locale } from './types';
+
+export { ar, de, es, fr, hi, ja, ru };
+
 export const zhCN = {
   'app.title': '4Link · 四连引力',
   'app.description':
@@ -350,6 +361,33 @@ export const zhCN = {
   'result.rematchPending': '已发出「再来一局」，等对手确认。',
   'result.waitingOpponent': '等待对手',
 
+  /* ---------- 旋转模式 ---------- */
+  'menu.mode.rotation': '旋转模式',
+  'menu.rotationHeading': '旋转模式',
+  'menu.rotationRule':
+    '每落一子，棋盘顺时针旋转 90°，棋子朝新的下方重新落下。旋转或塌落形成的四连同样算胜利。',
+  'menu.rotationVsAi': '人机对战',
+  'menu.rotationVsLocal': '本地双人',
+  'menu.startRotation': '开始旋转对局',
+  'menu.notes.rotation1': '每落一子，棋盘顺时针旋转 90°，棋子按新方向重新塌落。',
+  'menu.notes.rotation2': '旋转或塌落之后形成的四连同样算胜利，任何一方都算。',
+  'menu.notes.rotation3': '双方同时成线时，落子的一方优先。',
+  'menu.notes.rotation4': '落子瞬间直接成四或棋盘填满时不再旋转，直接结算。',
+  'game.mode.rotation': '旋转模式 · {cols}×{rows}',
+  'game.rotationNotice.rotated': '棋盘已顺时针旋转 90°',
+  'game.rotationTurns': {
+    one: '已旋转 {count} 次',
+    other: '已旋转 {count} 次',
+  },
+  'game.aria.rotationProgress': '旋转次数',
+  'board.rotationTitle': '旋转模式',
+  'board.rotationMeta': '{cols} × {rows} · 每手顺时针 90°',
+  'board.rotationFooter': 'ROTATE · 每下一子顺时针旋转 90°',
+  'result.rotations': {
+    one: '本局旋转 {count} 次',
+    other: '本局旋转 {count} 次',
+  },
+
   /* ---------- 无尽模式 ---------- */
   'menu.mode.endless': '无尽模式',
   'menu.endlessHeading': '无尽模式',
@@ -409,7 +447,14 @@ export const zhCN = {
   'endless.stamp': '防',
 } as const;
 
-type PluralForms = { one: string; other: string };
+type PluralForms = {
+  zero?: string;
+  one?: string;
+  two?: string;
+  few?: string;
+  many?: string;
+  other: string;
+};
 
 export type MessageKey = keyof typeof zhCN;
 
@@ -772,6 +817,33 @@ export const zhTW = {
   'result.waitingOpponent': '等待對手',
 
   /* ---------- 無盡模式 ---------- */
+  /* ---------- 旋轉模式 ---------- */
+  'menu.mode.rotation': '旋轉模式',
+  'menu.rotationHeading': '旋轉模式',
+  'menu.rotationRule':
+    '每落一子，棋盤順時針旋轉 90°，棋子朝新的下方重新落下。旋轉或塌落形成的四連同樣算勝利。',
+  'menu.rotationVsAi': '人機對戰',
+  'menu.rotationVsLocal': '本地雙人',
+  'menu.startRotation': '開始旋轉對局',
+  'menu.notes.rotation1': '每落一子，棋盤順時針旋轉 90°，棋子按新方向重新塌落。',
+  'menu.notes.rotation2': '旋轉或塌落之後形成的四連同樣算勝利，任何一方都算。',
+  'menu.notes.rotation3': '雙方同時成線時，落子的一方優先。',
+  'menu.notes.rotation4': '落子瞬間直接成四或棋盤填滿時不再旋轉，直接結算。',
+  'game.mode.rotation': '旋轉模式 · {cols}×{rows}',
+  'game.rotationNotice.rotated': '棋盤已順時針旋轉 90°',
+  'game.rotationTurns': {
+    one: '已旋轉 {count} 次',
+    other: '已旋轉 {count} 次',
+  },
+  'game.aria.rotationProgress': '旋轉次數',
+  'board.rotationTitle': '旋轉模式',
+  'board.rotationMeta': '{cols} × {rows} · 每手順時針 90°',
+  'board.rotationFooter': 'ROTATE · 每下一子順時針旋轉 90°',
+  'result.rotations': {
+    one: '本局旋轉 {count} 次',
+    other: '本局旋轉 {count} 次',
+  },
+
   'menu.mode.endless': '無盡模式',
   'menu.endlessHeading': '無盡模式',
   'menu.endlessRule': 'AI 固定先手。你連成四子不算勝利；擋住它，撐得越久越好。',
@@ -1191,6 +1263,37 @@ export const en = {
   'result.rematchPending': 'Rematch requested — waiting for your opponent.',
   'result.waitingOpponent': 'Waiting for opponent',
 
+  /* ---------- Rotation ---------- */
+  'menu.mode.rotation': 'Rotation',
+  'menu.rotationHeading': 'Rotation mode',
+  'menu.rotationRule':
+    'Every drop turns the board 90° clockwise, and the stones fall toward the new bottom. Lines formed by the turn or the fall also win.',
+  'menu.rotationVsAi': 'Vs AI',
+  'menu.rotationVsLocal': 'Local 2P',
+  'menu.startRotation': 'Start rotation match',
+  'menu.notes.rotation1':
+    'After every drop the board turns 90° clockwise and the stones settle toward the new bottom.',
+  'menu.notes.rotation2':
+    'A line formed by the turn or the fall wins too — for either player.',
+  'menu.notes.rotation3':
+    'If both players complete a line at once, the player who moved wins.',
+  'menu.notes.rotation4':
+    'If a drop wins immediately or fills the board, the board does not turn; the game ends right away.',
+  'game.mode.rotation': 'Rotation · {cols}×{rows}',
+  'game.rotationNotice.rotated': 'The board turned 90° clockwise',
+  'game.rotationTurns': {
+    one: 'Turned {count} time',
+    other: 'Turned {count} times',
+  },
+  'game.aria.rotationProgress': 'Rotation count',
+  'board.rotationTitle': 'Rotation mode',
+  'board.rotationMeta': '{cols} × {rows} · 90° clockwise each move',
+  'board.rotationFooter': 'ROTATE · each drop turns the board 90° clockwise',
+  'result.rotations': {
+    one: 'Board turned {count} time',
+    other: 'Board turned {count} times',
+  },
+
   /* ---------- Endless ---------- */
   'menu.mode.endless': 'Endless',
   'menu.endlessHeading': 'Endless mode',
@@ -1258,11 +1361,15 @@ export const en = {
 } satisfies Messages;
 
 /** 所有语言的字典。 */
-export const DICTIONARIES: Record<
-  'zh-CN' | 'zh-TW' | 'en',
-  Messages
-> = {
+export const DICTIONARIES: Record<Locale, Messages> = {
   'zh-CN': zhCN,
   'zh-TW': zhTW,
   en,
+  ja,
+  es,
+  fr,
+  de,
+  ru,
+  hi,
+  ar,
 };

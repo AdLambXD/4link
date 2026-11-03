@@ -1,16 +1,6 @@
-import { LOCALES, useI18n, type Locale, type StringKey } from '../i18n';
-
-const NAME_KEYS: Record<Locale, StringKey> = {
-  'zh-CN': 'language.zhCN',
-  'zh-TW': 'language.zhTW',
-  en: 'language.en',
-};
-
-const SHORT_KEYS: Record<Locale, StringKey> = {
-  'zh-CN': 'language.short.zhCN',
-  'zh-TW': 'language.short.zhTW',
-  en: 'language.short.en',
-};
+import { useEffect, useRef, useState } from 'react';
+import { useI18n } from '../i18n';
+import { LANGUAGES } from '../i18n/languages';
 
 interface LanguageSwitchProps {
   /** compact 用于报头，full 用于设置面板。 */
@@ -19,30 +9,101 @@ interface LanguageSwitchProps {
 
 export function LanguageSwitch({ variant = 'compact' }: LanguageSwitchProps) {
   const { locale, setLocale, t } = useI18n();
-  const keys = variant === 'full' ? NAME_KEYS : SHORT_KEYS;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const current =
+    LANGUAGES.find((language) => language.id === locale) ?? LANGUAGES[0];
+
+  // 点击外部或按 Esc 关闭弹出菜单。
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('touchstart', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('touchstart', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (variant === 'full') {
+    return (
+      <div
+        className="lang-switch lang-switch-full"
+        role="group"
+        aria-label={t('language.groupAria')}
+      >
+        {LANGUAGES.map((language) => {
+          const selected = language.id === locale;
+          return (
+            <button
+              key={language.id}
+              type="button"
+              lang={language.id}
+              className={`lang-option${selected ? ' is-on' : ''}`}
+              onClick={() => setLocale(language.id)}
+              aria-pressed={selected}
+            >
+              <span className="lang-option-name">{language.name}</span>
+              <span className="lang-option-short">{language.short}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={`lang-switch lang-switch-${variant}`}
-      role="group"
-      aria-label={t('language.groupAria')}
-    >
-      {LOCALES.map((item) => {
-        const selected = item === locale;
-        return (
-          <button
-            key={item}
-            type="button"
-            className={`lang-option${selected ? ' is-on' : ''}`}
-            onClick={() => setLocale(item)}
-            aria-pressed={selected}
-            aria-label={t(NAME_KEYS[item])}
-            title={t(NAME_KEYS[item])}
-          >
-            {t(keys[item])}
-          </button>
-        );
-      })}
+    <div className="lang-menu" ref={rootRef}>
+      <button
+        type="button"
+        className={`lang-trigger${open ? ' is-open' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={t('language.groupAria')}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span lang={locale}>{current.short}</span>
+        <span className="lang-caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div
+          className="lang-pop"
+          role="listbox"
+          aria-label={t('language.groupAria')}
+        >
+          {LANGUAGES.map((language) => {
+            const selected = language.id === locale;
+            return (
+              <button
+                key={language.id}
+                type="button"
+                role="option"
+                lang={language.id}
+                aria-selected={selected}
+                className={`lang-pop-option${selected ? ' is-on' : ''}`}
+                onClick={() => {
+                  setLocale(language.id);
+                  setOpen(false);
+                }}
+              >
+                <span className="lang-pop-name">{language.name}</span>
+                <span className="lang-pop-short">{language.short}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
