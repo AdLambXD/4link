@@ -1,7 +1,17 @@
 import { useState, type CSSProperties } from 'react';
 import type { BoardStyle } from '../board';
-import { colLabel, idx, type GameState } from '../game/rules';
+import { colLabel, idx, type Cell, type GameState } from '../game/rules';
 import { useI18n } from '../i18n';
+
+/** 旋转动画的三个阶段：落子、旋转、塌落。 */
+export interface BoardRotationFx {
+  phase: 'drop' | 'rotate' | 'settle';
+  board: readonly Cell[];
+  heights: readonly number[];
+  last: number | null;
+  /** 塌落阶段每颗棋子的下落格数，键为棋盘索引。 */
+  falls?: Readonly<Record<number, number>> | null;
+}
 
 interface BoardProps {
   state: GameState;
@@ -16,8 +26,8 @@ interface BoardProps {
   footer?: string;
   /** 格线样式：规整或手绘。 */
   boardStyle?: BoardStyle;
-  /** 旋转模式每次旋转时变化的时间戳；变化即播放提示动画。 */
-  rotationPulse?: number | null;
+  /** 旋转模式的过渡画面；有值时覆盖当前棋盘并播放旋转 / 塌落动画。 */
+  rotationFx?: BoardRotationFx | null;
 }
 
 /** 星位：按棋盘大小取靠边的四个点，偶数盘不强行放中心。 */
@@ -163,7 +173,7 @@ export function Board({
   meta,
   footer,
   boardStyle = 'clean',
-  rotationPulse = null,
+  rotationFx = null,
 }: BoardProps) {
   const { t } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
@@ -172,9 +182,13 @@ export function Board({
   const boardTitle = title ?? t('board.defaultTitle');
   const boardMeta = meta ?? t('board.defaultMeta', { cols, rows, win });
   const rowOrder = Array.from({ length: rows }, (_, i) => rows - 1 - i);
-  const playing = state.status === 'playing' && !disabled;
+  const playing = state.status === 'playing' && !disabled && !rotationFx;
+  const shownBoard = rotationFx?.board ?? state.board;
+  const shownHeights = rotationFx?.heights ?? state.heights;
+  const shownLast = rotationFx ? rotationFx.last : state.last;
+  const rotating = rotationFx?.phase === 'rotate';
   const landingRow =
-    hover !== null && state.heights[hover] < rows ? state.heights[hover] : null;
+    hover !== null && shownHeights[hover] < rows ? shownHeights[hover] : null;
 
   const step = 100 / cols;
   const edge = step / 2;
@@ -209,13 +223,13 @@ export function Board({
         </div>
 
         <div
-          className="board"
+          className={`board${rotating ? ' is-rotating' : ''}`}
           onMouseLeave={() => setHover(null)}
         >
           <div className="board-veil" aria-hidden="true" />
 
-          {rotationPulse !== null && (
-            <div className="rotation-flash" key={rotationPulse} aria-hidden="true">
+          {rotating && (
+            <div className="rotation-flash" aria-hidden="true">
               <span className="rotation-arrow">↻</span>
             </div>
           )}
@@ -362,11 +376,19 @@ export function Board({
           {rowOrder.map((r) =>
             Array.from({ length: cols }, (_, c) => {
               const i = idx(r, c, cols);
-              const value = state.board[i];
-              const isWin = state.winLine?.includes(i) ?? false;
-              const isLast = state.last === i;
-              const isGhost = landingRow === r && hover === c && value === 0;
-              const full = state.heights[c] >= rows;
+              const value = shownBoard[i];
+              const isWin = !rotationFx && (state.winLine?.includes(i) ?? false);
+              const isLast = shownLast === i;
+              const isGhost =
+                !rotationFx &&
+                landingRow === r &&
+                hover === c &&
+                value === 0;
+              const full = shownHeights[c] >= rows;
+              const settleFall =
+                rotationFx?.phase === 'settle'
+                  ? (rotationFx.falls?.[i] ?? 0)
+                  : 0;
 
               return (
                 <button
@@ -401,7 +423,16 @@ export function Board({
                 >
                   {value !== 0 && (
                     <span
-                      className={`stone p${value}${isLast ? ' dropping' : ''}`}
+                      className={`stone p${value}${
+                        isLast && (!rotationFx || rotationFx.phase === 'drop')
+                          ? ' dropping'
+                          : ''
+                      }${settleFall > 0 ? ' settling' : ''}`}
+                      style={
+                        settleFall > 0
+                          ? ({ '--fall': settleFall } as CSSProperties)
+                          : undefined
+                      }
                     />
                   )}
                   {isGhost && <span className={`ghost p${state.turn}`} />}

@@ -496,6 +496,11 @@ button {
   gap: 8px;
 }
 
+/* 同一块里连续几组选项（旋转模式）之间留出和按钮相同的间距。 */
+.block .choices + .choices {
+  margin-top: 8px;
+}
+
 .choices-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1170,6 +1175,24 @@ button {
   animation: rotation-arrow-turn 0.7s cubic-bezier(0.3, 0.7, 0.3, 1) forwards;
 }
 
+/* 旋转阶段：整块棋盘顺时针转 90°。中途稍微缩小，四角才不会扫出棋盘框。 */
+.board.is-rotating {
+  transform-origin: 50% 50%;
+  animation: board-spin 0.47s cubic-bezier(0.45, 0.05, 0.25, 1) both;
+}
+
+@keyframes board-spin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(0.72);
+  }
+  100% {
+    transform: rotate(90deg) scale(1);
+  }
+}
+
 @keyframes rotation-flash-out {
   0% {
     opacity: 0;
@@ -1204,6 +1227,11 @@ button {
   .rotation-arrow {
     animation: none;
     opacity: 0.7;
+  }
+
+  .board.is-rotating,
+  .stone.settling {
+    animation-duration: 0.01s;
   }
 }
 
@@ -1326,6 +1354,23 @@ button {
 
 .stone.dropping {
   animation: drop calc(130ms + var(--fall) * 22ms) cubic-bezier(0.33, 0.9, 0.4, 1) both;
+}
+
+/* 塌落阶段：从旋转后的位置继续往下落到新底部。 */
+.stone.settling {
+  animation: settle calc(120ms + var(--fall) * 26ms) cubic-bezier(0.33, 0.9, 0.4, 1) both;
+}
+
+@keyframes settle {
+  0% {
+    transform: translateY(calc(var(--fall) * -112%));
+  }
+  78% {
+    transform: translateY(0) scale(1.04, 0.94);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
 }
 
 @keyframes drop {

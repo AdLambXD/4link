@@ -65,6 +65,14 @@ const DEFAULT_CONFIG: MatchConfig = {
   tutorialId: null,
 };
 
+/** 旋转模式的三段式过渡：落子 → 旋转 → 塌落。 */
+interface RotationFx {
+  phase: 'drop' | 'rotate' | 'settle';
+  dropped: GameState;
+  final: GameState;
+  falls: Readonly<Record<number, number>>;
+}
+
 interface Series {
   wins: number[];
   draws: number;
@@ -107,6 +115,7 @@ export default function App() {
     key: StringKey;
     id: number;
   } | null>(null);
+  const [rotationFx, setRotationFx] = useState<RotationFx | null>(null);
 
   const requestMove = useAiEngine();
   const {
@@ -190,6 +199,30 @@ export default function App() {
     const timer = window.setTimeout(() => setRotationNotice(null), 2200);
     return () => window.clearTimeout(timer);
   }, [rotationNotice]);
+
+  // 旋转动画：先让落子动画播完，再旋转，最后让棋子落到新底部。
+  useEffect(() => {
+    if (rotationFx === null) return;
+    const next =
+      rotationFx.phase === 'drop'
+        ? 'rotate'
+        : rotationFx.phase === 'rotate'
+          ? 'settle'
+          : null;
+    const delay =
+      rotationFx.phase === 'drop'
+        ? 320
+        : rotationFx.phase === 'rotate'
+          ? 470
+          : 400;
+    const timer = window.setTimeout(() => {
+      setRotationFx((fx) => {
+        if (fx !== rotationFx) return fx;
+        return next === null ? null : { ...fx, phase: next };
+      });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [rotationFx]);
 
   /* ---------- 联机 ---------- */
   const screenRef = useRef(screen);
@@ -333,9 +366,18 @@ export default function App() {
       setResultVisible(false);
       return;
     }
-    const timer = window.setTimeout(() => setResultVisible(true), 900);
+    // 旋转模式要等旋转 + 塌落动画播完，再让结算面板盖上来。
+    const delay = match.mode === 'rotation' ? 1250 : 900;
+    const timer = window.setTimeout(() => setResultVisible(true), delay);
     return () => window.clearTimeout(timer);
-  }, [screen, state.status, state.count, puzzleExhausted, tutorialComplete]);
+  }, [
+    screen,
+    state.status,
+    state.count,
+    puzzleExhausted,
+    tutorialComplete,
+    match.mode,
+  ]);
 
   /* ---------- 落子音效 ---------- */
   useEffect(() => {
@@ -354,6 +396,11 @@ export default function App() {
   /* ---------- 常规 AI 行动 ---------- */
   useEffect(() => {
     if (screen !== 'game' || aiPlayer === null) return;
+    // 旋转动画期间先别让 AI 落下下一手，否则画面会跳。
+    if (rotationFx !== null) {
+      setThinking(false);
+      return;
+    }
     if (state.status !== 'playing' || state.turn !== aiPlayer) {
       setThinking(false);
       return;
@@ -383,10 +430,15 @@ export default function App() {
             const applied = playRotation(state, result.col);
             if (applied.state === state) return;
             dispatch({ type: 'step', state: applied.state });
-            playDrop(aiPlayer, soundOn);
-            if (applied.rotated) {
+            if (applied.rotated && applied.dropped) {
               setRotationTurns((count) => count + 1);
               showRotationNotice('game.rotationNotice.rotated');
+              setRotationFx({
+                phase: 'drop',
+                dropped: applied.dropped,
+                final: applied.state,
+                falls: applied.falls ?? {},
+              });
             }
           } else if (endless) {
             const applied = playEndless(state, result.col, human);
@@ -425,6 +477,7 @@ export default function App() {
     showEndlessNotice,
     showRotationNotice,
     soundOn,
+    rotationFx,
   ]);
 
   /* ---------- 谜题 AI 防守 ---------- */
@@ -559,12 +612,13 @@ export default function App() {
     setEndlessNotice(null);
     setRotationTurns(0);
     setRotationNotice(null);
+    setRotationFx(null);
     setScreen('game');
   }, []);
 
   const play = useCallback(
     (col: number) => {
-      if (thinking || puzzleExhausted) return;
+      if (thinking || puzzleExhausted || rotationFx) return;
       if (state.status !== 'playing') return;
       if (aiPlayer !== null && state.turn === aiPlayer) return;
       if (match.mode === 'puzzle' && state.turn !== 1) return;
@@ -596,10 +650,15 @@ export default function App() {
         const applied = playRotation(state, col);
         if (applied.state === state) return;
         dispatch({ type: 'step', state: applied.state });
-        playDrop(state.turn, soundOn);
-        if (applied.rotated) {
+        if (applied.rotated && applied.dropped) {
           setRotationTurns((count) => count + 1);
           showRotationNotice('game.rotationNotice.rotated');
+          setRotationFx({
+            phase: 'drop',
+            dropped: applied.dropped,
+            final: applied.state,
+            falls: applied.falls ?? {},
+          });
         }
         return;
       }
@@ -644,12 +703,15 @@ export default function App() {
       showEndlessNotice,
       showRotationNotice,
       soundOn,
+      rotationFx,
     ],
   );
 
   const undo = useCallback(() => {
     if (match.mode === 'online' || match.mode === 'endless') return;
-    if (thinking || puzzleExhausted || match.mode === 'tutorial') return;
+    if (thinking || puzzleExhausted || match.mode === 'tutorial' || rotationFx) {
+      return;
+    }
     if (state.status !== 'playing') return;
     const steps =
       match.mode === 'pve' || match.mode === 'puzzle'
@@ -664,7 +726,14 @@ export default function App() {
       setRotationTurns((count) => Math.max(0, count - steps));
     }
     dispatch({ type: 'undo', steps });
-  }, [thinking, state.status, match.mode, puzzleExhausted, rotationLocal]);
+  }, [
+    thinking,
+    state.status,
+    match.mode,
+    puzzleExhausted,
+    rotationLocal,
+    rotationFx,
+  ]);
 
   const restart = useCallback(() => {
     if (match.mode === 'online') {
@@ -700,6 +769,7 @@ export default function App() {
     setEndlessNotice(null);
     setRotationTurns(0);
     setRotationNotice(null);
+    setRotationFx(null);
   }, [match.mode, online.requestRematch, puzzle, tutorial]);
 
   const swap = useCallback(() => {
@@ -718,6 +788,7 @@ export default function App() {
     setResultVisible(false);
     setRotationTurns(0);
     setRotationNotice(null);
+    setRotationFx(null);
   }, [match.mode, match.opponent]);
 
   const askHint = useCallback(async () => {
@@ -1254,7 +1325,29 @@ export default function App() {
                         : undefined
             }
             boardStyle={board.style}
-            rotationPulse={rotationNotice?.id ?? null}
+            rotationFx={
+              rotationFx === null
+                ? null
+                : {
+                    phase: rotationFx.phase,
+                    board:
+                      rotationFx.phase === 'settle'
+                        ? rotationFx.final.board
+                        : rotationFx.dropped.board,
+                    heights:
+                      rotationFx.phase === 'settle'
+                        ? rotationFx.final.heights
+                        : rotationFx.dropped.heights,
+                    last:
+                      rotationFx.phase === 'drop'
+                        ? rotationFx.dropped.last
+                        : null,
+                    falls:
+                      rotationFx.phase === 'settle'
+                        ? rotationFx.falls
+                        : null,
+                  }
+            }
           />
           {tutorial ? (
             <TutorialPanel

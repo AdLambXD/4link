@@ -96,6 +96,28 @@ describe('旋转模式落子', () => {
     expect(applied.state.board[5]).toBe(1);
     expect(applied.state.heights).toEqual([0, 0, 0, 0, 0, 1]);
     expect(isGravityValid(applied.state)).toBe(true);
+
+    // 动画元数据：落子后的局面停在左下角，旋转后才到右下角。
+    expect(applied.dropped).not.toBeNull();
+    expect(applied.dropped?.board[0]).toBe(1);
+    expect(applied.dropped?.heights).toEqual([1, 0, 0, 0, 0, 0]);
+    // 这一子在旋转后已经贴在底部，无需再下落。
+    expect(applied.falls).toEqual({ 5: 0 });
+  });
+
+  it('落子瞬间结束时不产生动画元数据', () => {
+    const state = fromRows([
+      '......',
+      '......',
+      '......',
+      '......',
+      '......',
+      'XXX..O',
+    ]);
+    const applied = playRotation(state, 3);
+
+    expect(applied.dropped).toBeNull();
+    expect(applied.falls).toBeNull();
   });
 
   it('旋转后形成的四连算胜利，并重新映射连线', () => {

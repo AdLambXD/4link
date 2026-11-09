@@ -23,6 +23,10 @@ export interface RotationMove {
   readonly rotated: boolean;
   /** 旋转 / 塌落之后形成的胜者；落子瞬间直接获胜时为 null */
   readonly rotationWin: Player | null;
+  /** 落子后、旋转前的局面；没有旋转时为 null。界面用它在旋转前先播放落子动画。 */
+  readonly dropped: GameState | null;
+  /** 每颗棋子在塌落阶段还要下落几格，键为最终棋盘索引；没有旋转时为 null。 */
+  readonly falls: Readonly<Record<number, number>> | null;
 }
 
 /** 顺时针旋转 90°：new[r][c] = old[rows - 1 - c][r]。 */
@@ -104,12 +108,24 @@ export function playRotation(state: GameState, col: number): RotationMove {
   const mover = state.turn;
   const moved = drop(state, col);
   if (moved === state) {
-    return { state, rotated: false, rotationWin: null };
+    return {
+      state,
+      rotated: false,
+      rotationWin: null,
+      dropped: null,
+      falls: null,
+    };
   }
 
   // 落子瞬间就成四或满盘：对局结束，不再旋转。
   if (moved.status !== 'playing' || moved.last === null) {
-    return { state: moved, rotated: false, rotationWin: null };
+    return {
+      state: moved,
+      rotated: false,
+      rotationWin: null,
+      dropped: null,
+      falls: null,
+    };
   }
 
   const { cols, rows, players } = moved.config;
@@ -129,6 +145,17 @@ export function playRotation(state: GameState, col: number): RotationMove {
     }
   }
 
+  // 记录每颗棋子在塌落前的位置：键是最终索引，值是还要下落的格数。
+  const falls: Record<number, number> = {};
+  for (let c = 0; c < cols; c++) {
+    let finalRow = 0;
+    for (let r = 0; r < rows; r++) {
+      if (rotated[r * cols + c] === 0) continue;
+      falls[finalRow * cols + c] = r - finalRow;
+      finalRow += 1;
+    }
+  }
+
   const found = findAnyLine(board as Cell[], moved.config, scanOrder(mover, players));
 
   if (found) {
@@ -145,6 +172,8 @@ export function playRotation(state: GameState, col: number): RotationMove {
       },
       rotated: true,
       rotationWin: found.winner,
+      dropped: moved,
+      falls,
     };
   }
 
@@ -162,5 +191,7 @@ export function playRotation(state: GameState, col: number): RotationMove {
     },
     rotated: true,
     rotationWin: null,
+    dropped: moved,
+    falls,
   };
 }
