@@ -1363,7 +1363,9 @@ button {
 
 @keyframes settle {
   0% {
-    transform: translateY(calc(var(--fall) * -112%));
+    /* 每格 = 棋子高度的 113.64%（棋子在格子里 inset 6%），
+       这样起始位置正好接上旋转结束时棋子所在的那一格。 */
+    transform: translateY(calc(var(--fall) * -113.64%));
   }
   78% {
     transform: translateY(0) scale(1.04, 0.94);

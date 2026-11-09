@@ -36,9 +36,9 @@ describe('顺时针旋转', () => {
   it('3×3 的映射符合顺时针 90°', () => {
     const board: Cell[] = [1, 2, 3, 4, 5, 6, 0, 1, 2];
     expect(rotateClockwise(board, 3, 3)).toEqual([
-      0, 4, 1,
-      1, 5, 2,
-      2, 6, 3,
+      3, 6, 2,
+      2, 5, 1,
+      1, 4, 0,
     ]);
   });
 
@@ -92,17 +92,17 @@ describe('旋转模式落子', () => {
     expect(applied.state.status).toBe('playing');
     expect(applied.state.count).toBe(1);
     expect(applied.state.turn).toBe(2);
-    // 左下角的棋子在顺时针旋转后落到右下角。
-    expect(applied.state.board[5]).toBe(1);
-    expect(applied.state.heights).toEqual([0, 0, 0, 0, 0, 1]);
+    // 左下角的棋子顺时针转到左上角，再塌落回左下角。
+    expect(applied.state.board[0]).toBe(1);
+    expect(applied.state.heights).toEqual([1, 0, 0, 0, 0, 0]);
     expect(isGravityValid(applied.state)).toBe(true);
 
-    // 动画元数据：落子后的局面停在左下角，旋转后才到右下角。
+    // 动画元数据：落子后的局面停在左下角，旋转后才到左上角并下落。
     expect(applied.dropped).not.toBeNull();
     expect(applied.dropped?.board[0]).toBe(1);
     expect(applied.dropped?.heights).toEqual([1, 0, 0, 0, 0, 0]);
-    // 这一子在旋转后已经贴在底部，无需再下落。
-    expect(applied.falls).toEqual({ 5: 0 });
+    // 这一子从旋转后的第 5 行一路落到底部，共下落 5 格。
+    expect(applied.falls).toEqual({ 0: 5 });
   });
 
   it('落子瞬间结束时不产生动画元数据', () => {
@@ -118,6 +118,31 @@ describe('旋转模式落子', () => {
 
     expect(applied.dropped).toBeNull();
     expect(applied.falls).toBeNull();
+  });
+
+  it('falls 让每颗棋子从旋转后的位置接着下落', () => {
+    const state = fromRows([
+      '......',
+      '......',
+      '..X...',
+      '.XO...',
+      'XOO...',
+      'XOO..X',
+    ]);
+    const applied = playRotation(state, 2);
+    expect(applied.dropped).not.toBeNull();
+    expect(applied.falls).not.toBeNull();
+
+    const { cols, rows } = state.config;
+    const rotated = rotateClockwise(applied.dropped!.board, cols, rows);
+    for (const [key, fall] of Object.entries(applied.falls!)) {
+      const i = Number(key);
+      const finalRow = Math.floor(i / cols);
+      const col = i % cols;
+      const rotatedIndex = (finalRow + fall) * cols + col;
+      // 下落前的位置（旋转后棋盘）与最终位置上必须是同一颗棋子。
+      expect(rotated[rotatedIndex]).toBe(applied.state.board[i]);
+    }
   });
 
   it('旋转后形成的四连算胜利，并重新映射连线', () => {
@@ -146,14 +171,14 @@ describe('旋转模式落子', () => {
       [
         '......',
         '......',
-        '..O...',
-        '.OX...',
-        'OXX...',
-        'OXX...',
+        '...O..',
+        '...XO.',
+        '...XXO',
+        '...XXO',
       ],
       2,
     );
-    const applied = playRotation(state, 2);
+    const applied = playRotation(state, 3);
 
     expect(applied.rotationWin).toBe(2);
     expect(applied.state.winner).toBe(2);

@@ -29,7 +29,12 @@ export interface RotationMove {
   readonly falls: Readonly<Record<number, number>> | null;
 }
 
-/** 顺时针旋转 90°：new[r][c] = old[rows - 1 - c][r]。 */
+/**
+ * 顺时针旋转 90°。
+ *
+ * 行 0 是屏幕底部：左下角转到左上角，再沿新棋盘向下塌落。
+ * 旋转后行列互换，新棋盘的列数等于原来的行数。
+ */
 export function rotateClockwise(
   board: readonly Cell[],
   cols: number,
@@ -38,7 +43,8 @@ export function rotateClockwise(
   const out = new Array<Cell>(cols * rows).fill(0);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      out[c * cols + (rows - 1 - r)] = board[r * cols + c];
+      // 旧坐标 (r, c) → 新坐标 (行 = cols - 1 - c, 列 = r)。
+      out[(cols - 1 - c) * rows + r] = board[r * cols + c];
     }
   }
   return out;
