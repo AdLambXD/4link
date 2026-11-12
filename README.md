@@ -73,7 +73,7 @@ v1.0 起，每次推送到 `main` 都会在 GitHub Release 里同时附上网页
 2. 首次安装时允许浏览器或文件管理器「安装未知来源应用」。
 3. 若之前装过用其它签名密钥打出的旧版本，系统会提示签名冲突；先卸载旧版再安装即可覆盖升级。
 
-GitHub Actions 默认用一次性密钥签名，APK 能直接安装，但不同构建之间不能覆盖升级。想固定签名，在仓库 **Settings → Secrets and variables → Actions** 添加：
+APK 以仓库 Secrets 里的固定密钥库签名，同一密钥打出的版本可以互相覆盖升级。密钥的生成、备份与轮换流程见 [`docs/SIGNING.md`](docs/SIGNING.md)。
 
 | Secret | 内容 |
 | --- | --- |
@@ -84,7 +84,7 @@ GitHub Actions 默认用一次性密钥签名，APK 能直接安装，但不同�
 
 ### Windows
 
-下载 `portable.exe` 直接运行，或下载 `setup.exe` 安装后从开始菜单启动。Windows 10 / 11 即可，无需安装 Node.js。安装包没有代码签名证书，SmartScreen 可能提示「未知发布者」，选择「更多信息 → 仍要运行」。
+下载 `portable.exe` 直接运行，或下载 `setup.exe` 安装后从开始菜单启动。Windows 10 / 11 即可，无需安装 Node.js。Windows 安装包使用 [SignPath Foundation](https://signpath.org/) 提供的免费开源代码签名（free code signing provided by SignPath.org）；尚未完成签名的版本会被 SmartScreen 提示「未知发布者」，选择「更多信息 → 仍要运行」即可。
 
 ### 本地打包
 

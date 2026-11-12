@@ -283,19 +283,35 @@ jobs:
         id: pkg
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Compose signing notice
+        id: signing
+        env:
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+        run: |
+          if [ -n "$SIGNPATH_PROJECT_SLUG" ]; then
+            {
+              echo "notice<<EOF"
+              echo "Windows builds are code signed with free code signing provided by [SignPath.io](https://signpath.io/), certificate by the [SignPath Foundation](https://signpath.org/)."
+              echo ""
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNING_NOTICE: ${{ steps.signing.outputs.notice }}
         run: |
           TAG="v${{ steps.pkg.outputs.version }}-build.${{ github.run_number }}"
           TITLE="v${{ steps.pkg.outputs.version }} build ${{ github.run_number }}"
           FILES=(4link-dist.zip android-apk/*.apk desktop-app/*.exe)
+          ARGS=(--target "${{ github.sha }}" --title "$TITLE" --generate-notes)
+          if [ -n "$SIGNING_NOTICE" ]; then
+            ARGS+=(--notes "$SIGNING_NOTICE")
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${FILES[@]}" --clobber
           else
-            gh release create "$TAG" "${FILES[@]}" \
-              --target "${{ github.sha }}" \
-              --title "$TITLE" \
-              --generate-notes
+            gh release create "$TAG" "${FILES[@]}" "${ARGS[@]}"
           fi
 
