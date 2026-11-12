@@ -1,8 +1,21 @@
 # 4Link · 四连引力
 
+**简体中文** | [English](README.en.md)
+
 > 重力棋盘上的连线游戏 —— **Drop. Stack. Link.**
 
 方形围棋盘上，轮流选一列落子，棋子会落到该列最底部的交叉点。横、竖、两条斜线，任意方向连成指定数量即胜。
+
+<p align="center">
+  <img src="docs/screenshots/menu.png" width="32%" alt="主菜单" />
+  <img src="docs/screenshots/board-washi.png" width="32%" alt="和纸主题对局" />
+  <img src="docs/screenshots/board-neon.png" width="32%" alt="蓝染主题 + 霓虹格线" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/settings-board-styles.png" width="49%" alt="6 种棋盘格线" />
+  <img src="docs/screenshots/settings-themes.png" width="49%" alt="4 套主题与 10 种语言" />
+</p>
 
 ## 特性
 
