@@ -334,8 +334,8 @@ server/
 - 残局目前是 12 道固定关卡，没有关卡编辑器；新增关卡需在 `src/game/puzzle.ts` 写盘面并跑测试验证。
 - 教程目前是 6 节固定课程，步骤与对手应手都写死在 `src/game/tutorial.ts`；暂不支持自定义课程或自由练习模式，教程中也不能悔棋。
 - 棋盘背景一次只支持一张图片；棋子与棋盘图片都存放在 `localStorage`，浏览器配额不足时可能无法持久化。
-- APK 默认使用 CI 生成的一次性签名，能直接安装但不能跨构建覆盖升级；需要固定签名请配置仓库 Secrets。
-- Windows 安装包没有代码签名证书，SmartScreen 首次运行会提示未知发布者。
+- APK 使用仓库 Secrets 中的固定密钥库签名，可跨版本覆盖升级；密钥管理与轮换流程见 [`docs/SIGNING.md`](docs/SIGNING.md)。
+- Windows 安装包通过 SignPath 开源计划做云端签名；未配置对应凭证时发布会退回未签名包，SmartScreen 会提示未知发布者。
 - 暂无棋谱复盘（见路线图）。
 
 ## Roadmap

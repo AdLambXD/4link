@@ -9,6 +9,8 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  # SignPath 动作需要读取本次运行的 job 信息与产物
+  actions: read
 
 concurrency:
   group: pages
@@ -164,6 +166,15 @@ jobs:
   desktop:
     needs: build
     runs-on: windows-latest
+    env:
+      # SignPath 开源代码签名（免费）。四个变量 + 一个密钥都配上才会真正签名；
+      # 缺任意一项时自动跳过签名步骤，照样产出可运行的未签名 EXE。
+      # 配置方法见 docs/SIGNING.md。
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+      SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -181,17 +192,61 @@ jobs:
         run: npm run build:app
 
       - name: Build Windows apps
+        # 先产出未签名产物，签名交给 SignPath 云端完成（私钥不离开 HSM）。
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win portable nsis
+
+      - name: Stage unsigned binaries
+        run: |
+          New-Item -ItemType Directory -Force out-unsigned, out | Out-Null
+          Copy-Item "release/*-portable.exe" out-unsigned/
+          Copy-Item "release/*-setup.exe" out-unsigned/
+
+      - name: Upload unsigned binaries
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: 4link-windows-unsigned
+          path: out-unsigned/*.exe
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Submit SignPath signing request
+        id: signpath
+        if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ env.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ env.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Collect signed binaries
+        if: steps.signpath.outcome == 'success'
+        run: |
+          Get-ChildItem -Path signed -Recurse -Filter *.exe | Copy-Item -Destination out/
+          Write-Host "Signed artifacts:"
+          Get-ChildItem out/*.exe | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            Write-Host ("{0} -> {1}" -f $_.Name, $sig.Status)
+          }
+
+      - name: Collect unsigned binaries
+        if: steps.signpath.outcome != 'success'
+        run: |
+          Copy-Item out-unsigned/*.exe out/
+          Write-Host "SignPath secrets not configured or signing skipped; shipping unsigned binaries."
 
       - name: Upload Windows apps
         uses: actions/upload-artifact@v4
         with:
           name: 4link-desktop
-          path: |
-            release/*-portable.exe
-            release/*-setup.exe
+          path: out/*.exe
           retention-days: 7
 
   release:

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4Link · SignPath 产物配置（slug: windows-exe）
+
+  用法：
+    CI 会把 release/*-portable.exe 与 release/*-setup.exe 汇总到一个 ZIP 根目录，
+    再作为 GitHub 产物上传。本配置按 ZIP 解析，对根目录下所有 EXE 做 Authenticode 签名。
+
+  在 SignPath 控制台 Projects → <project> → Artifact Configurations 中粘贴此内容。
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration">
+  <zip-file>
+    <pe-file-set path="*.exe">
+      <authenticode-sign />
+    </pe-file-set>
+  </zip-file>
+</artifact-configuration>
