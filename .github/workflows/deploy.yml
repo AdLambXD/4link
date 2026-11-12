@@ -102,7 +102,14 @@ jobs:
           java-version: 21
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        # v3 默认安装已被 Google 移除的 `tools` 包，会直接失败；
+        # v4 只装 platform-tools，SDK 平台在下一步显式安装。
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Install dependencies
         run: npm ci
