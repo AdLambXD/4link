@@ -13,9 +13,17 @@ const PNG = 'data:image/png;base64,iVBORw0KGgo=';
 const WEBP = 'data:image/webp;base64,UklGRiIAAABXRUJQ';
 
 describe('棋盘自定义', () => {
-  it('格线样式只接受规整与手绘', () => {
-    expect(isBoardStyle('clean')).toBe(true);
-    expect(isBoardStyle('handdrawn')).toBe(true);
+  it('格线样式只接受六种预设', () => {
+    for (const style of [
+      'clean',
+      'handdrawn',
+      'dotted',
+      'blueprint',
+      'neon',
+      'minimal',
+    ]) {
+      expect(isBoardStyle(style)).toBe(true);
+    }
     expect(isBoardStyle('sketch')).toBe(false);
     expect(isBoardStyle(1)).toBe(false);
     expect(isBoardStyle(null)).toBe(false);

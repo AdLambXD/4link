@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.adlambxd.fourlink",
+  "appName": "4Link",
+  "webDir": "dist",
+  "backgroundColor": "#f0e9d8",
+  "android": {
+    "allowMixedContent": false
+  }
+}

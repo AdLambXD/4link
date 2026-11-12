@@ -61,6 +61,10 @@ const BOARD_STYLE_META: Record<
 > = {
   clean: { nameKey: 'settings.boardStyle.clean', note: 'CLEAN' },
   handdrawn: { nameKey: 'settings.boardStyle.handdrawn', note: 'SKETCH' },
+  dotted: { nameKey: 'settings.boardStyle.dotted', note: 'DOTS' },
+  blueprint: { nameKey: 'settings.boardStyle.blueprint', note: 'PLAN' },
+  neon: { nameKey: 'settings.boardStyle.neon', note: 'NEON' },
+  minimal: { nameKey: 'settings.boardStyle.minimal', note: 'PURE' },
 };
 
 const IMAGE_ERROR_KEYS: Record<ImageErrorCode, StringKey> = {
@@ -72,12 +76,16 @@ const IMAGE_ERROR_KEYS: Record<ImageErrorCode, StringKey> = {
   'too-complex': 'errors.image.tooComplex',
 };
 
-/** 设置面板里的格线小样；手绘版用略带弧度的路径。 */
+/** 设置面板里的格线小样；每种样式用同一套 40×40 缩略图。 */
 function BoardStylePreview({ style }: { style: BoardStyle }) {
+  const dots = [7, 13.5, 20, 26.5, 33];
+  const grid = (
+    <path d="M14 7v26M26 7v26M7 14h26M7 26h26" />
+  );
   return (
     <span className="board-style-preview" aria-hidden="true">
       <svg viewBox="0 0 40 40" fill="none">
-        {style === 'handdrawn' ? (
+        {style === 'handdrawn' && (
           <g stroke="var(--board-grid)" strokeLinecap="round" fill="none">
             <path d="M6.4 6.3 L33.2 6.9" strokeWidth="2.1" />
             <path d="M33.5 6.4 L33.1 33.5" strokeWidth="1.5" />
@@ -88,12 +96,74 @@ function BoardStylePreview({ style }: { style: BoardStyle }) {
             <path d="M6.3 14.4 C14 15 25 14.2 33.5 14.9" strokeWidth="1.5" />
             <path d="M6.7 25.3 C14 24.6 25 25.5 33.3 24.7" strokeWidth="2" />
           </g>
-        ) : (
+        )}
+
+        {style === 'clean' && (
           <g stroke="var(--board-grid)" strokeWidth="1">
             <rect x="7" y="7" width="26" height="26" />
-            <path d="M14 7v26M26 7v26M7 14h26M7 26h26" />
+            {grid}
           </g>
         )}
+
+        {style === 'dotted' && (
+          <>
+            <rect
+              x="7"
+              y="7"
+              width="26"
+              height="26"
+              stroke="var(--board-grid)"
+              strokeWidth="1"
+            />
+            <g fill="var(--board-dot)">
+              {dots.map((x) =>
+                dots.map((y) => (
+                  <circle key={`${x}-${y}`} cx={x} cy={y} r="0.85" />
+                )),
+              )}
+            </g>
+          </>
+        )}
+
+        {style === 'blueprint' && (
+          <g stroke="var(--board-grid)">
+            <rect x="7" y="7" width="26" height="26" strokeWidth="1.2" />
+            <rect
+              x="9.6"
+              y="9.6"
+              width="20.8"
+              height="20.8"
+              strokeWidth="0.5"
+              opacity="0.6"
+            />
+            <g strokeWidth="0.55">{grid}</g>
+          </g>
+        )}
+
+        {style === 'neon' && (
+          <>
+            <g stroke="var(--accent)" strokeWidth="3.2" opacity="0.22">
+              <rect x="7" y="7" width="26" height="26" />
+              {grid}
+            </g>
+            <g stroke="var(--accent)" strokeWidth="0.9">
+              <rect x="7" y="7" width="26" height="26" />
+              {grid}
+            </g>
+          </>
+        )}
+
+        {style === 'minimal' && (
+          <rect
+            x="7"
+            y="7"
+            width="26"
+            height="26"
+            stroke="var(--board-grid)"
+            strokeWidth="1.2"
+          />
+        )}
+
         <circle cx="14" cy="14" r="1.4" fill="var(--board-dot)" />
         <circle cx="26" cy="26" r="1.4" fill="var(--board-dot)" />
       </svg>

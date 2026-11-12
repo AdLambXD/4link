@@ -197,6 +197,17 @@ export function Board({
   const starRadius = cols >= 12 ? 0.55 : 0.75;
   const stars = starPoints(cols);
 
+  // 规整类格线：竖线与横线都在单元格中心，棋子落在交叉点上。
+  const gridLines = Array.from({ length: cols }, (_, i) => {
+    const p = edge + i * step;
+    return (
+      <g key={i}>
+        <line x1={p} y1={edge} x2={p} y2={far} />
+        <line x1={edge} y1={p} x2={far} y2={p} />
+      </g>
+    );
+  });
+
   return (
     <div className="board-frame">
       <div className="board-meta">
@@ -235,7 +246,7 @@ export function Board({
           )}
 
           <svg
-            className="board-lines"
+            className={`board-lines style-${boardStyle}`}
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
             aria-hidden="true"
@@ -316,38 +327,115 @@ export function Board({
               </g>
             ) : (
               <>
-                <rect
-                  x={edge}
-                  y={edge}
-                  width={far - edge}
-                  height={far - edge}
-                  fill="none"
-                  stroke="var(--board-grid)"
-                  strokeWidth={lineWidth * 1.7}
-                />
-                {Array.from({ length: cols }, (_, i) => {
-                  const p = edge + i * step;
-                  return (
-                    <g key={i}>
-                      <line
-                        x1={p}
-                        y1={edge}
-                        x2={p}
-                        y2={far}
+                {boardStyle === 'minimal' ? (
+                  <rect
+                    x={edge}
+                    y={edge}
+                    width={far - edge}
+                    height={far - edge}
+                    fill="none"
+                    stroke="var(--board-grid)"
+                    strokeWidth={lineWidth * 1.4}
+                  />
+                ) : (
+                  <>
+                    <rect
+                      x={edge}
+                      y={edge}
+                      width={far - edge}
+                      height={far - edge}
+                      fill="none"
+                      stroke={
+                        boardStyle === 'neon'
+                          ? 'var(--accent)'
+                          : 'var(--board-grid)'
+                      }
+                      strokeWidth={lineWidth * 1.7}
+                    />
+                    {boardStyle === 'blueprint' && (
+                      <rect
+                        x={edge + 0.9}
+                        y={edge + 0.9}
+                        width={far - edge - 1.8}
+                        height={far - edge - 1.8}
+                        fill="none"
                         stroke="var(--board-grid)"
-                        strokeWidth={lineWidth}
+                        strokeWidth={lineWidth * 0.45}
+                        opacity={0.6}
                       />
-                      <line
-                        x1={edge}
-                        y1={p}
-                        x2={far}
-                        y2={p}
-                        stroke="var(--board-grid)"
-                        strokeWidth={lineWidth}
+                    )}
+                    {boardStyle === 'neon' && (
+                      <g
+                        opacity={0.22}
+                        stroke="var(--accent)"
+                        strokeWidth={lineWidth * 5}
+                        strokeLinecap="round"
+                      >
+                        {gridLines}
+                      </g>
+                    )}
+                    {boardStyle !== 'dotted' && (
+                      <g
+                        stroke={
+                          boardStyle === 'neon'
+                            ? 'var(--accent)'
+                            : 'var(--board-grid)'
+                        }
+                        strokeWidth={
+                          boardStyle === 'blueprint'
+                            ? lineWidth * 0.72
+                            : lineWidth
+                        }
+                        strokeLinecap="round"
+                      >
+                        {gridLines}
+                      </g>
+                    )}
+                    {boardStyle === 'blueprint' &&
+                      Array.from({ length: cols }, (_, r) =>
+                        Array.from({ length: cols }, (_, c) => {
+                          const x = edge + c * step;
+                          const y = edge + r * step;
+                          const arm = step * 0.07;
+                          return (
+                            <g
+                              key={`${r}-${c}`}
+                              stroke="var(--board-grid)"
+                              strokeWidth={lineWidth * 0.55}
+                              opacity={0.75}
+                            >
+                              <line
+                                x1={x - arm}
+                                y1={y}
+                                x2={x + arm}
+                                y2={y}
+                              />
+                              <line
+                                x1={x}
+                                y1={y - arm}
+                                x2={x}
+                                y2={y + arm}
+                              />
+                            </g>
+                          );
+                        }),
+                      )}
+                  </>
+                )}
+
+                {boardStyle === 'dotted' &&
+                  Array.from({ length: cols }, (_, r) =>
+                    Array.from({ length: cols }, (_, c) => (
+                      <circle
+                        key={`${r}-${c}`}
+                        cx={edge + c * step}
+                        cy={edge + r * step}
+                        r={starRadius * 0.68}
+                        fill="var(--board-dot)"
                       />
-                    </g>
-                  );
-                })}
+                    )),
+                  )}
+
                 {stars.map((r) =>
                   stars.map((c) => (
                     <circle

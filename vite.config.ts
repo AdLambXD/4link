@@ -9,9 +9,12 @@ const env = process.env;
 const repo = env.GITHUB_REPOSITORY?.split('/')[1] ?? '';
 const isUserSite = repo.endsWith('.github.io');
 const explicitBase = env.BASE_PATH?.trim();
-const base =
-  explicitBase ||
-  (env.GITHUB_ACTIONS && repo && !isUserSite ? `/${repo}/` : '/');
+// 桌面（Electron）与移动端（Capacitor）安装包用相对路径加载资源。
+const appBuild = env.APP_BUILD === '1';
+const base = appBuild
+  ? './'
+  : explicitBase ||
+    (env.GITHUB_ACTIONS && repo && !isUserSite ? `/${repo}/` : '/');
 
 export default defineConfig({
   base,

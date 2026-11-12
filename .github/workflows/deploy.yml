@@ -76,18 +76,141 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+  android:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build:app
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # 仓库 Secrets 里配置签名密钥后即可产出固定签名的 APK，可覆盖安装升级；
+      # 未配置时用一次性密钥签名，APK 仍可直接安装，但升级前需要先卸载旧版。
+      - name: Prepare signing key
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/4link-release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/4link-release.jks" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -v \
+              -keystore "$RUNNER_TEMP/4link-debug.jks" \
+              -storepass 4linkdebug -alias 4link -keypass 4linkdebug \
+              -dname "CN=4Link, O=4Link, C=CN" \
+              -keyalg RSA -keysize 2048 -validity 10000
+            {
+              echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/4link-debug.jks"
+              echo "ANDROID_KEYSTORE_PASSWORD=4linkdebug"
+              echo "ANDROID_KEY_ALIAS=4link"
+              echo "ANDROID_KEY_PASSWORD=4linkdebug"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Collect APK
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk \
+            "out/4Link-${VERSION}-android.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: 4link-android
+          path: out/*.apk
+          retention-days: 7
+
+  desktop:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build:app
+
+      - name: Build Windows apps
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npx electron-builder --win portable nsis
+
+      - name: Upload Windows apps
+        uses: actions/upload-artifact@v4
+        with:
+          name: 4link-desktop
+          path: |
+            release/*-portable.exe
+            release/*-setup.exe
+          retention-days: 7
+
   release:
-    needs: [build, deploy]
+    needs: [build, deploy, android, desktop]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download release artifact
+      - name: Download web artifact
         uses: actions/download-artifact@v4
         with:
           name: 4link-dist
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 4link-android
+          path: android-apk
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 4link-desktop
+          path: desktop-app
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -104,10 +227,11 @@ jobs:
         run: |
           TAG="v${{ steps.pkg.outputs.version }}-build.${{ github.run_number }}"
           TITLE="v${{ steps.pkg.outputs.version }} build ${{ github.run_number }}"
+          FILES=(4link-dist.zip android-apk/*.apk desktop-app/*.exe)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" 4link-dist.zip --clobber
+            gh release upload "$TAG" "${FILES[@]}" --clobber
           else
-            gh release create "$TAG" 4link-dist.zip \
+            gh release create "$TAG" "${FILES[@]}" \
               --target "${{ github.sha }}" \
               --title "$TITLE" \
               --generate-notes

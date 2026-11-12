@@ -19,12 +19,13 @@
 - 围棋式交叉点网格、星位、木框与行列坐标；棋子落在交叉点上
 - 4 套可扩展**整站主题**：和纸 / 榧木 / 青瓷 / 蓝染（暗色），纸张、墨色、控件与棋盘一起切换
 - 设置面板：整站主题、棋盘格线 / 底色 / 背景、1–6 号棋子自定义颜色与图片，修改即时生效并持久化
-- 棋盘格线可在「规整」与「手绘」之间切换；手绘版用确定性抖动绘制，不改变交叉点位置
+- 棋盘格线 **6 种样式**：规整 / 手绘 / 点阵 / 蓝图 / 霓虹 / 极简；全部只改变画法，不改变交叉点与落子判定
 - 上传图片自动居中裁切、压缩后保存在本机（棋子 256×256，棋盘背景 1024×1024 WebP / PNG）
 - 落子动画、获胜连线高亮、悬停列提示与落点幽灵
 - 悔棋、重开、提示、音效开关
 - 键盘 `1`–`0` 落子，`Esc` 悔棋，`R` 重开
 - 本场胜局记分；双人战绩、残局进度与教程进度持久化（localStorage）
+- 同一套代码打包为 **Android APK** 与 **Windows EXE**（portable + 安装版），离线可玩
 
 ## 快速开始
 
@@ -53,9 +54,53 @@ npm test         # 规则、AI、残局、教程、外观与多语言测试
 chmod +x start-linux.sh
 ```
 
+## 安装包（Android APK / Windows EXE）
+
+v1.0 起，每次推送到 `main` 都会在 GitHub Release 里同时附上网页包和安装包：
+
+| 平台 | 文件 | 说明 |
+| --- | --- | --- |
+| Android | `4Link-<版本>-android.apk` | Android 7.0（API 24）及以上，直接安装 |
+| Windows | `4Link-<版本>-portable.exe` | 免安装便携版，双击即用 |
+| Windows | `4Link-<版本>-setup.exe` | NSIS 安装版，可选安装目录、创建快捷方式 |
+| Web | `4link-dist.zip` | 静态站点压缩包，可放到任意静态托管 |
+
+安装包内置完整的网页资源，**断网也能玩**；人机、本地对战、残局和教程都不需要网络，联机仍使用 WebRTC / 中继。
+
+### Android
+
+1. 在手机上打开 Release 页面，下载 `4Link-<版本>-android.apk`。
+2. 首次安装时允许浏览器或文件管理器「安装未知来源应用」。
+3. 若之前装过用其它签名密钥打出的旧版本，系统会提示签名冲突；先卸载旧版再安装即可覆盖升级。
+
+GitHub Actions 默认用一次性密钥签名，APK 能直接安装，但不同构建之间不能覆盖升级。想固定签名，在仓库 **Settings → Secrets and variables → Actions** 添加：
+
+| Secret | 内容 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | 签名库文件的 Base64（`base64 -w0 release.jks`） |
+| `ANDROID_KEYSTORE_PASSWORD` | 签名库密码 |
+| `ANDROID_KEY_ALIAS` | 密钥别名 |
+| `ANDROID_KEY_PASSWORD` | 密钥密码 |
+
+### Windows
+
+下载 `portable.exe` 直接运行，或下载 `setup.exe` 安装后从开始菜单启动。Windows 10 / 11 即可，无需安装 Node.js。安装包没有代码签名证书，SmartScreen 可能提示「未知发布者」，选择「更多信息 → 仍要运行」。
+
+### 本地打包
+
+```bash
+npm run build:app     # 生成相对路径的 dist（桌面与 Capacitor 共用）
+npm run cap:sync      # 构建并同步到 android/
+npm run electron:build # 构建并生成 release/ 下的 portable 与 setup
+```
+
+- APK：`npm run cap:sync` 后进入 `android/` 执行 `./gradlew assembleRelease`，需要 JDK 21 与 Android SDK 36（`ANDROID_HOME`）。
+- EXE：`npm run electron:build` 需要 Electron 与 NSIS 的下载权限，产物在 `release/`。
+- 图标与启动图由 `scripts/make-icons.ps1` 生成；换图后重跑脚本即可。
+
 ## GitHub Pages 部署
 
-仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages；同时会创建一个 GitHub Release，附带构建产物 `4link-dist.zip`。Release 标签格式为 `v<版本号>-build.<运行序号>`（例如 `v0.7.0-build.17`），每次推送到 `main` 生成一个。
+仓库已附带 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)：推送到 `main` 后会自动安装依赖、跑测试、构建并发布到 GitHub Pages；同时并行构建 Android APK 与 Windows EXE，最后创建一个 GitHub Release，附带 `4link-dist.zip`、APK 与两个 EXE。Release 标签格式为 `v<版本号>-build.<运行序号>`（例如 `v1.0.0-build.17`），每次推送到 `main` 生成一个。
 
 1. 打开仓库的 **Settings → Pages**。
 2. 在 **Build and deployment → Source** 中选择 **GitHub Actions**。
@@ -152,7 +197,7 @@ npm run dev -- --host
 点击菜单报头或对局顶部的设置按钮打开「设置」。它控制的是**整站外观**，不只棋盘：
 
 - **整站主题**：和纸 / 榧木 / 青瓷 / 蓝染。每套主题同时定义页面纸张、墨色、规则线、强调色、棋盘面子和 1–6 号默认棋子颜色；蓝染为暗色主题。
-- **棋盘样式**：格线可选「规整」或「手绘」。手绘版用固定种子为每条线单独生成粗细、倾斜、间距与弯度，外框双描边，星位画成不规则墨点；交叉点位置与落子判定完全不变。
+- **棋盘样式**：格线可选「规整 / 手绘 / 点阵 / 蓝图 / 霓虹 / 极简」六种。手绘版用固定种子为每条线单独生成粗细、倾斜、间距与弯度，外框双描边，星位画成不规则墨点；点阵只保留交叉点；蓝图加内框与十字刻度；霓虹用主题强调色发光；极简只留外框。所有样式都不改变交叉点位置与落子判定。
 - **棋盘背景**：可覆盖棋盘底色，或上传 PNG / JPG / WebP（最大 12 MB）作为背景图。图片会居中裁成正方形、压缩到 1024×1024；「背景蒙版」滑杆控制主题底色覆盖强度，保证格线与棋子仍然清楚。
 - **棋子颜色**：1–6 号玩家可分别覆盖主题色，未自定义的玩家继续跟随主题；可随时「跟随主题」恢复。
 - **棋子图片**：为任意玩家上传 PNG / JPG / WebP（最大 8 MB）。图片会居中裁成正方形、压缩到 256×256，再以 data URL 保存在本机；棋盘、结算面板和菜单预览会同步显示。
@@ -185,10 +230,15 @@ npm run dev -- --host
 
 ```
 .github/
-└─ workflows/deploy.yml  # GitHub Pages 自动部署
+└─ workflows/deploy.yml  # GitHub Pages + Android APK + Windows EXE + Release
 start-windows.bat        # Windows 一键启动
 start-linux.sh           # Linux / macOS 一键启动
-vite.config.ts           # Vite 配置（自动适配 Pages 子路径）
+vite.config.ts           # Vite 配置（Pages 子路径 / 安装包相对路径）
+capacitor.config.json    # Capacitor（Android）配置
+electron/main.cjs        # Electron 主进程
+build/icon.png           # 桌面应用与安装包图标
+scripts/make-icons.ps1   # 生成桌面 / Android 图标与启动图
+android/                 # Capacitor 生成的 Android Studio 工程
 src/
 ├─ game/
 │  ├─ rules.ts          # 纯函数规则：尺寸/人数配置、落子、判胜、和棋、悔棋 reducer
@@ -284,6 +334,8 @@ server/
 - 残局目前是 12 道固定关卡，没有关卡编辑器；新增关卡需在 `src/game/puzzle.ts` 写盘面并跑测试验证。
 - 教程目前是 6 节固定课程，步骤与对手应手都写死在 `src/game/tutorial.ts`；暂不支持自定义课程或自由练习模式，教程中也不能悔棋。
 - 棋盘背景一次只支持一张图片；棋子与棋盘图片都存放在 `localStorage`，浏览器配额不足时可能无法持久化。
+- APK 默认使用 CI 生成的一次性签名，能直接安装但不能跨构建覆盖升级；需要固定签名请配置仓库 Secrets。
+- Windows 安装包没有代码签名证书，SmartScreen 首次运行会提示未知发布者。
 - 暂无棋谱复盘（见路线图）。
 
 ## Roadmap
@@ -301,7 +353,7 @@ server/
 - [x] v0.10 连接方式可选：WebSocket 中继（Cloudflare / 自建 VPS）、自动重连与三语文案
 - [x] v0.11 无尽模式：玩家只防守、AI 持续进攻，满盘上移一行继续，按防守手数计分
 - [x] v0.12 旋转模式：每下一子顺时针 90° 并重新塌落，新增法 / 德 / 印 / 俄 / 日 / 西 / 阿七种语言
-- [ ] v1.0 棋盘外观更新，添加更多样式，复查全部代码，推出正式版
+- [x] v1.0 正式版：棋盘格线扩到 6 种样式，Android APK 与 Windows EXE 打包，CI 同时发布网页、APK、EXE
 - [ ] 棋谱复盘
 
 ## 参考

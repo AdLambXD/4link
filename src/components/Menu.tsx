@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Difficulty } from '../ai/engine';
-import type { BoardCustomization } from '../board';
+import type { BoardCustomization, BoardStyle } from '../board';
 import { PUZZLES, getPuzzle } from '../game/puzzle';
 import { TUTORIALS, getTutorial } from '../game/tutorial';
 import { BOARD_SIZES, MAX_PLAYERS, SIZE_WIN, type BoardSize } from '../game/rules';
@@ -21,6 +21,16 @@ import type { Skin } from '../skins';
 import { ArrowRightIcon, SettingsIcon } from './Icons';
 import { LanguageSwitch } from './LanguageSwitch';
 import { OnlinePanel, type OnlinePanelProps } from './OnlinePanel';
+
+/** 菜单外观摘要里显示的格线名称。 */
+const BOARD_STYLE_NOTE: Record<BoardStyle, StringKey> = {
+  clean: 'settings.boardStyle.clean',
+  handdrawn: 'menu.handdrawn',
+  dotted: 'settings.boardStyle.dotted',
+  blueprint: 'settings.boardStyle.blueprint',
+  neon: 'settings.boardStyle.neon',
+  minimal: 'settings.boardStyle.minimal',
+};
 
 export interface MatchConfig {
   mode:
@@ -135,9 +145,9 @@ export function Menu({
     ? t('menu.customBackground')
     : board.face
       ? t('menu.customFace')
-      : board.style === 'handdrawn'
-        ? t('menu.handdrawn')
-        : null;
+      : board.style === 'clean'
+        ? null
+        : t(BOARD_STYLE_NOTE[board.style]);
 
   let step = 0;
   const num = () => String(++step).padStart(2, '0');

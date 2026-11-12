@@ -9,7 +9,14 @@ import { isHexColor } from './pieces';
  * - image：自定义背景图 data URL，null 表示不使用图片；
  * - veil：背景图上盖一层主题底色蒙版，保证格线与棋子可读（0–0.85）。
  */
-export const BOARD_STYLES = ['clean', 'handdrawn'] as const;
+export const BOARD_STYLES = [
+  'clean',
+  'handdrawn',
+  'dotted',
+  'blueprint',
+  'neon',
+  'minimal',
+] as const;
 
 export type BoardStyle = (typeof BOARD_STYLES)[number];
 
