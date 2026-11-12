@@ -7,3 +7,7 @@ coverage
 *.log
 .DS_Store
 release
+
+# 安卓签名文件，绝不能提交到仓库
+*.jks
+*.keystore
